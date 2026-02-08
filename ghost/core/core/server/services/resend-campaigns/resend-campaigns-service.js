@@ -427,7 +427,7 @@ class ResendCampaignsService {
                 const sourceRecipients = await this.#fetchAudienceRecipients(campaign.audience);
 
                 if (sourceRecipients.length === 0) {
-                    throw new Error('No eligible recipients at send time.');
+                    throw new BadRequestError({message: 'No eligible recipients at send time.'});
                 }
 
                 await this.db.knex.transaction(async (trx) => {
@@ -525,7 +525,9 @@ class ResendCampaignsService {
                 await this.#updateAggregates(campaignId);
 
                 if (i !== chunks.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+                    await new Promise((resolve) => {
+                        setTimeout(resolve, BATCH_DELAY_MS);
+                    });
                 }
             }
 

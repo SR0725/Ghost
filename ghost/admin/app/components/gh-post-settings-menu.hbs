@@ -177,25 +177,24 @@
                                 {{#if this.resendCampaigns.length}}
                                     <div class="mt2">
                                         {{#each this.resendCampaigns as |campaign|}}
-                                            <details class="gh-box mb2" {{on "toggle" (fn this.selectResendCampaign campaign.id)}}>
-                                                <summary>
+                                            <div class="gh-box mb2">
+                                                <button type="button" class="gh-btn gh-btn-link ma0 pa0" {{on "click" (fn this.selectResendCampaign campaign.id)}}>
                                                     <strong>{{campaign.status}}</strong>
                                                     · {{campaign.audience}}
                                                     · {{campaign.sent_count}} / {{campaign.recipient_count}}
                                                     · {{campaign.progress_pct}}%
-                                                </summary>
-                                                <div class="mt2">
-                                                    <p class="ma0">Opened: {{campaign.opened_count}} · Clicked: {{campaign.clicked_count}} · Failed: {{campaign.failed_count}}</p>
-                                                    <div class="gh-btn-group mt2">
-                                                        <button type="button" class="gh-btn gh-btn-outline" disabled={{this.isSyncingResend}} {{on "click" (fn this.syncResendCampaign campaign.id)}}>
-                                                            <span>{{if this.isSyncingResend "Syncing..." "Sync metrics"}}</span>
-                                                        </button>
-                                                        <button type="button" class="gh-btn gh-btn-outline" {{on "click" (fn this.exportResendRecipientsCsv campaign.id)}}>
-                                                            <span>Export CSV</span>
-                                                        </button>
-                                                    </div>
-
-                                                    {{#if (eq this.resendSelectedCampaignId campaign.id)}}
+                                                </button>
+                                                {{#if (eq this.resendSelectedCampaignId campaign.id)}}
+                                                    <div class="mt2">
+                                                        <p class="ma0">Opened: {{campaign.opened_count}} · Clicked: {{campaign.clicked_count}} · Failed: {{campaign.failed_count}}</p>
+                                                        <div class="gh-btn-group mt2">
+                                                            <button type="button" class="gh-btn gh-btn-outline" disabled={{this.isSyncingResend}} {{on "click" (fn this.syncResendCampaign campaign.id)}}>
+                                                                <span>{{if this.isSyncingResend "Syncing..." "Sync metrics"}}</span>
+                                                            </button>
+                                                            <button type="button" class="gh-btn gh-btn-outline" {{on "click" (fn this.exportResendRecipientsCsv campaign.id)}}>
+                                                                <span>Export CSV</span>
+                                                            </button>
+                                                        </div>
                                                         <div class="mt3">
                                                             <h6 class="ma0">Recipients (latest 100)</h6>
                                                             {{#if this.resendRecipients.length}}
@@ -208,9 +207,9 @@
                                                                 <p class="description mt2">No recipients loaded.</p>
                                                             {{/if}}
                                                         </div>
-                                                    {{/if}}
-                                                </div>
-                                            </details>
+                                                    </div>
+                                                {{/if}}
+                                            </div>
                                         {{/each}}
                                     </div>
                                 {{else}}
