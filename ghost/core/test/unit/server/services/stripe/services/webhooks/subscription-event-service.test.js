@@ -31,7 +31,7 @@ describe('SubscriptionEventService', function () {
     it('should throw ConflictError if linkSubscription fails with ER_DUP_ENTRY', async function () {
         const subscription = {
             items: {
-                data: [{price: {id: 'price_123'}}]
+                data: [{price: {id: 'price_123', product: 'prod_TsdKROExPlhk9k'}}]
             },
             customer: 'cust_123'
         };
@@ -50,7 +50,7 @@ describe('SubscriptionEventService', function () {
     it('should throw ConflictError if linkSubscription fails with SQLITE_CONSTRAINT', async function () {
         const subscription = {
             items: {
-                data: [{price: {id: 'price_123'}}]
+                data: [{price: {id: 'price_123', product: 'prod_TsdKROExPlhk9k'}}]
             },
             customer: 'cust_123'
         };
@@ -69,7 +69,7 @@ describe('SubscriptionEventService', function () {
     it('should throw if linkSubscription fails with unexpected error', async function () {
         const subscription = {
             items: {
-                data: [{price: {id: 'price_123'}}]
+                data: [{price: {id: 'price_123', product: 'prod_TsdKROExPlhk9k'}}]
             },
             customer: 'cust_123'
         };
@@ -89,7 +89,7 @@ describe('SubscriptionEventService', function () {
         memberRepository.get.rejects(new Error('Unexpected error'));
 
         try {
-            await service.handleSubscriptionEvent({items: {data: [{price: {id: 'price_123'}}]}});
+            await service.handleSubscriptionEvent({items: {data: [{price: {id: 'price_123', product: 'prod_TsdKROExPlhk9k'}}]}});
             assert.fail('Expected error');
         } catch (err) {
             assert.equal(err.message, 'Unexpected error');
@@ -99,7 +99,7 @@ describe('SubscriptionEventService', function () {
     it('should call linkSubscription with correct arguments', async function () {
         const subscription = {
             items: {
-                data: [{price: {id: 'price_123'}}]
+                data: [{price: {id: 'price_123', product: 'prod_TsdKROExPlhk9k'}}]
             },
             customer: 'cust_123'
         };
@@ -111,5 +111,19 @@ describe('SubscriptionEventService', function () {
         await service.handleSubscriptionEvent(subscription);
 
         assert(memberRepository.linkSubscription.calledWith({id: 'member_123', subscription}));
+    });
+
+    it('should ignore subscriptions for unsupported Stripe products', async function () {
+        const subscription = {
+            items: {
+                data: [{price: {id: 'price_123', product: 'prod_not_allowed'}}]
+            },
+            customer: 'cust_123'
+        };
+
+        await service.handleSubscriptionEvent(subscription);
+
+        assert(memberRepository.get.notCalled);
+        assert(memberRepository.linkSubscription.notCalled);
     });
 });

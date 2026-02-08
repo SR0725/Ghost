@@ -1,5 +1,7 @@
 const errors = require('@tryghost/errors');
 const _ = require('lodash');
+const logging = require('@tryghost/logging');
+const {isAllowedStripeProductId} = require('../../allowed-product-ids');
 
 /**
  * Handles `customer.subscription.*` webhook events
@@ -30,6 +32,12 @@ module.exports = class SubscriptionEventService {
             throw new errors.BadRequestError({
                 message: 'Subscription should have exactly 1 price item'
             });
+        }
+
+        const product = _.get(subscriptionPriceData, '[0].price.product');
+        if (!isAllowedStripeProductId(product)) {
+            logging.info(`Ignoring customer.subscription webhook for unsupported Stripe product ${typeof product === 'string' ? product : product?.id ?? 'unknown'}`);
+            return;
         }
 
         const memberRepository = this.deps.memberRepository;

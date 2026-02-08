@@ -1,6 +1,7 @@
 const _ = require('lodash');
 const errors = require('@tryghost/errors');
 const logging = require('@tryghost/logging');
+const {isAllowedStripeProductId, getStripeProductId} = require('../../allowed-product-ids');
 
 /**
  * Handles `checkout.session.completed` webhook events
@@ -232,7 +233,23 @@ module.exports = class CheckoutSessionEventService {
                 email: customer.email
             });
 
-            for (const subscription of customer.subscriptions.data) {
+            /** @type {Array<import('stripe').Stripe.Subscription>} */
+            let subscriptionsToSync = customer.subscriptions.data || [];
+
+            if (session.subscription) {
+                const checkoutSubscription = await this.api.getSubscription(session.subscription, {
+                    expand: ['default_payment_method']
+                });
+                subscriptionsToSync = checkoutSubscription ? [checkoutSubscription] : [];
+            }
+
+            for (const subscription of subscriptionsToSync) {
+                const product = _.get(subscription, 'items.data[0].price.product') || _.get(subscription, 'plan.product');
+                if (!isAllowedStripeProductId(product)) {
+                    logging.info(`Ignoring checkout.subscription webhook for unsupported Stripe product ${getStripeProductId(product) ?? 'unknown'}`);
+                    continue;
+                }
+
                 try {
                     const offerId = session.metadata?.offer;
 

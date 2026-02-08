@@ -1,5 +1,7 @@
 const errors = require('@tryghost/errors');
 // const _ = require('lodash');
+const logging = require('@tryghost/logging');
+const {isAllowedStripeProductId, getStripeProductId} = require('../../allowed-product-ids');
 
 /**
  * Handles `invoice.payment_succeeded` webhook events
@@ -36,6 +38,11 @@ module.exports = class InvoiceEventService {
         const subscription = await api.getSubscription(invoice.subscription, {
             expand: ['default_payment_method']
         });
+        const stripeProductId = subscription.plan?.product || subscription.items?.data?.[0]?.price?.product;
+        if (!isAllowedStripeProductId(stripeProductId)) {
+            logging.info(`Ignoring invoice webhook for unsupported Stripe product ${getStripeProductId(stripeProductId) ?? 'unknown'}`);
+            return;
+        }
 
         const member = await memberRepository.get({
             customer_id: subscription.customer

@@ -10,6 +10,7 @@ const validator = require('@tryghost/validator');
 const crypto = require('crypto');
 const StartOutboxProcessingEvent = require('../../../outbox/events/start-outbox-processing-event');
 const {MEMBER_WELCOME_EMAIL_SLUGS} = require('../../../member-welcome-emails/constants');
+const {isAllowedStripeProductId, getStripeProductId} = require('../../../stripe/allowed-product-ids');
 const messages = {
     noStripeConnection: 'Cannot {action} without a Stripe Connection',
     moreThanOneProduct: 'A member cannot have more than one Product',
@@ -1023,12 +1024,17 @@ module.exports = class MemberRepository {
         const stripeCustomerSubscriptionModel = await this.getSubscriptionByStripeID(stripeSubscriptionData.id, {...options, forUpdate: true});
 
         const subscriptionPriceData = _.get(stripeSubscriptionData, 'items.data[0].price');
+        if (!isAllowedStripeProductId(subscriptionPriceData?.product)) {
+            logging.info(`Ignoring Stripe subscription ${stripeSubscriptionData.id} for unsupported product ${getStripeProductId(subscriptionPriceData?.product) ?? 'unknown'}`);
+            return;
+        }
+
         let ghostProduct;
         try {
             ghostProduct = await this._productRepository.get({stripe_product_id: subscriptionPriceData.product}, options);
-            // Use first Ghost product as default product in case of missing link
             if (!ghostProduct) {
-                ghostProduct = await this._productRepository.getDefaultProduct(options);
+                logging.info(`Ignoring Stripe subscription ${stripeSubscriptionData.id} because Stripe product ${subscriptionPriceData.product} is not linked to a Ghost product`);
+                return;
             }
 
             // Link Stripe Product & Price to Ghost Product

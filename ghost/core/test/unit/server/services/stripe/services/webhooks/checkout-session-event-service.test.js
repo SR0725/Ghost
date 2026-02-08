@@ -678,5 +678,26 @@ describe('CheckoutSessionEventService', function () {
             const memberData = memberRepository.update.getCall(0).args[0];
             assert.equal(memberData.newsletters, undefined);
         });
+
+        it('should ignore checkout subscription when Stripe product is unsupported', async function () {
+            api.getCustomer.resolves(customer);
+            api.getSubscription.resolves({
+                id: 'sub_unsupported',
+                items: {
+                    data: [{
+                        price: {
+                            id: 'price_unsupported',
+                            product: 'prod_not_allowed'
+                        }
+                    }]
+                }
+            });
+            memberRepository.get.resolves(member);
+            session.subscription = 'sub_unsupported';
+
+            await service.handleSubscriptionEvent(session);
+
+            assert(memberRepository.linkSubscription.notCalled);
+        });
     });
 });

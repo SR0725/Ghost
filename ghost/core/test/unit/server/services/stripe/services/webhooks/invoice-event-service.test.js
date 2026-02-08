@@ -59,7 +59,7 @@ describe('InvoiceEventService', function () {
     it('should throw NotFoundError if no member is found for subscription customer', async function () {
         const invoice = {
             customer: 'cust_123',
-            plan: 'plan_123',
+            plan: {product: 'prod_TsdKROExPlhk9k'},
             subscription: 'sub_123'
         };
         apiStub.getSubscription.resolves(invoice);
@@ -100,14 +100,14 @@ describe('InvoiceEventService', function () {
         // sinon.assert.notCalled(productRepositoryStub.get);
 
         assert(apiStub.getSubscription.calledOnce);
-        assert(memberRepositoryStub.get.calledOnce);
+        assert(memberRepositoryStub.get.notCalled);
         assert(productRepositoryStub.get.notCalled);
     });
 
     it('should return early if product is not found', async function () {
         const invoice = {
             subscription: 'sub_123',
-            plan: 'plan_123'
+            plan: {product: 'prod_TsdKROExPlhk9k'}
         };
         apiStub.getSubscription.resolves(invoice);
         memberRepositoryStub.get.resolves(null);
@@ -123,7 +123,7 @@ describe('InvoiceEventService', function () {
     it('can registerPayment', async function () {
         const invoice = {
             subscription: 'sub_123',
-            plan: 'plan_123',
+            plan: {product: 'prod_TsdKROExPlhk9k'},
             amount_paid: 100,
             paid: true
         };
@@ -140,7 +140,7 @@ describe('InvoiceEventService', function () {
     it('should not registerPayment if invoice is not paid', async function () {
         const invoice = {
             subscription: 'sub_123',
-            plan: 'plan_123',
+            plan: {product: 'prod_TsdKROExPlhk9k'},
             amount_paid: 0,
             paid: false
         };
@@ -157,7 +157,7 @@ describe('InvoiceEventService', function () {
     it('should not registerPayment if invoice amount paid is 0', async function () {
         const invoice = {
             subscription: 'sub_123',
-            plan: 'plan_123',
+            plan: {product: 'prod_TsdKROExPlhk9k'},
             amount_paid: 0,
             paid: true
         };
@@ -174,7 +174,7 @@ describe('InvoiceEventService', function () {
     it('should not register payment if amount paid is 0 and invoice is not paid', async function () {
         const invoice = {
             subscription: 'sub_123',
-            plan: 'plan_123',
+            plan: {product: 'prod_TsdKROExPlhk9k'},
             amount_paid: 0,
             paid: false
         };
@@ -190,7 +190,7 @@ describe('InvoiceEventService', function () {
     it('should not registerPayment if member is not found', async function () {
         const invoice = {
             subscription: 'sub_123',
-            plan: 'plan_123',
+            plan: {product: 'prod_TsdKROExPlhk9k'},
             amount_paid: 100,
             paid: true
         };
@@ -208,6 +208,22 @@ describe('InvoiceEventService', function () {
 
         assert(error instanceof errors.NotFoundError);
 
+        assert(eventRepositoryStub.registerPayment.notCalled);
+    });
+
+    it('should ignore unsupported Stripe products before member lookup', async function () {
+        const invoice = {
+            customer: 'cust_123',
+            plan: {product: 'prod_not_allowed'},
+            subscription: 'sub_123',
+            amount_paid: 100,
+            paid: true
+        };
+        apiStub.getSubscription.resolves(invoice);
+
+        await service.handleInvoiceEvent(invoice);
+
+        assert(memberRepositoryStub.get.notCalled);
         assert(eventRepositoryStub.registerPayment.notCalled);
     });
 });

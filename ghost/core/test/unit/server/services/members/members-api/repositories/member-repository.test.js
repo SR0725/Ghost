@@ -262,7 +262,7 @@ describe('MemberRepository', function () {
                         id: 'item_123',
                         price: {
                             id: 'price_123',
-                            product: 'product_123',
+                            product: 'prod_TsdKROExPlhk9k',
                             active: true,
                             nickname: 'Monthly',
                             currency: 'usd',
@@ -374,6 +374,49 @@ describe('MemberRepository', function () {
 
             assert.equal(subscriptionCreatedNotifySpy.calledOnce, true);
             assert.equal(offerRedemptionNotifySpy.called, false);
+        });
+
+        it('ignores subscriptions for unsupported Stripe products', async function () {
+            const repo = new MemberRepository({
+                stripeAPIService: {
+                    ...stripeAPIService,
+                    getSubscription: sinon.stub().resolves({
+                        ...subscriptionData,
+                        items: {
+                            type: 'list',
+                            data: [{
+                                id: 'item_123',
+                                price: {
+                                    ...subscriptionData.items.data[0].price,
+                                    product: 'prod_not_allowed'
+                                }
+                            }]
+                        }
+                    })
+                },
+                StripeCustomerSubscription,
+                MemberPaidSubscriptionEvent,
+                MemberProductEvent,
+                productRepository,
+                labsService,
+                Member,
+                OfferRedemption: mockOfferRedemption
+            });
+
+            sinon.stub(repo, 'getSubscriptionByStripeID').resolves(null);
+
+            await repo.linkSubscription({
+                id: 'member_id_123',
+                subscription: subscriptionData
+            }, {
+                transacting: {
+                    executionPromise: Promise.resolve()
+                },
+                context: {}
+            });
+
+            assert(StripeCustomerSubscription.add.notCalled);
+            assert(productRepository.update.notCalled);
         });
 
         it('dispatches the offer redemption event for a new member starting a subscription', async function (){
@@ -1355,7 +1398,7 @@ describe('MemberRepository', function () {
                         id: 'item_123',
                         price: {
                             id: 'price_123',
-                            product: 'product_123',
+                            product: 'prod_TsdKROExPlhk9k',
                             active: true,
                             nickname: 'Monthly',
                             currency: 'usd',
