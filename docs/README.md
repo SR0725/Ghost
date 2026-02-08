@@ -107,6 +107,7 @@ Before contributing, please read:
 - **[Ghost Forum](https://forum.ghost.org)** - Community support and discussions
 - **[API Documentation](https://ghost.org/docs/content-api/)** - Content and Admin API reference
 - **[Theme Documentation](https://ghost.org/docs/themes/)** - Theme development
+- **[Resend Campaign Handover](./resend-campaigns-handover.md)** - Resend 獨立廣發系統交接文件
 
 ## Architecture Decision Records
 

@@ -7,6 +7,12 @@ set -euo pipefail
 echo "Installing dependencies with --ignore-scripts..."
 yarn install --frozen-lockfile --prefer-offline --ignore-scripts "$@"
 
+# Ensure .bin symlinks are created (--ignore-scripts can skip bin linking in some environments)
+if [ ! -x "node_modules/.bin/tsc" ]; then
+    echo "Rebuilding bin symlinks..."
+    yarn install --frozen-lockfile --prefer-offline "$@"
+fi
+
 # Check if sqlite3 binary already exists (from cache or previous build)
 if [ -d "node_modules/sqlite3" ]; then
     # Check both possible binary locations:

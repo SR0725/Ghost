@@ -54,6 +54,11 @@ COPY .github/scripts/install-deps.sh .github/scripts/install-deps.sh
 RUN --mount=type=cache,target=/usr/local/share/.cache/yarn,id=yarn-cache \
     bash .github/scripts/install-deps.sh
 
+# Ensure bin symlinks exist (may be missing due to --ignore-scripts + cache interactions)
+RUN test -x node_modules/.bin/tsc || yarn install --frozen-lockfile --prefer-offline 2>/dev/null || true
+
+ENV PATH="/home/ghost/node_modules/.bin:${PATH}"
+
 # --------------------
 # Shade Builder
 # --------------------
@@ -190,7 +195,8 @@ RUN cd apps/admin && yarn build
 FROM development-base AS ghost-assets-builder
 WORKDIR /home/ghost
 COPY ghost/core ghost/core
-RUN cd ghost/core && yarn build:assets
+COPY --from=parse-email-address-builder /home/ghost/ghost/parse-email-address ghost/parse-email-address
+RUN cd ghost/core && yarn build:tsc && yarn build:assets
 
 # --------------------
 # Production
@@ -205,6 +211,7 @@ COPY . .
 
 # Copy all built assets from builder stages
 COPY --from=ghost-assets-builder /home/ghost/ghost/core/core/frontend/public ghost/core/core/frontend/public
+COPY --from=ghost-assets-builder /home/ghost/ghost/core/core/server ghost/core/core/server
 COPY --from=shade-builder /home/ghost/apps/shade/es apps/shade/es
 COPY --from=shade-builder /home/ghost/apps/shade/types apps/shade/types
 COPY --from=admin-x-design-system-builder /home/ghost/apps/admin-x-design-system/es apps/admin-x-design-system/es
