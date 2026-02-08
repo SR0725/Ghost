@@ -205,6 +205,10 @@ module.exports = {
         return apiFramework.pipeline(require('./newsletters'), localUtils);
     },
 
+    get resendCampaigns() {
+        return apiFramework.pipeline(require('./resend-campaigns'), localUtils);
+    },
+
     get comments() {
         return apiFramework.pipeline(require('./comments'), localUtils);
     },

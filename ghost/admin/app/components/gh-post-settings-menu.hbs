@@ -121,6 +121,105 @@
                         <GhPsmTemplateSelect
                             @post={{this.post}}
                             @onTemplateSelect={{action (mut this.post.customTemplate)}} />
+
+                        <div class="form-group">
+                            <label>Resend campaign</label>
+                            {{#if this.canUseResendCampaigns}}
+                                <p class="description">Send this published post through a dedicated Resend flow.</p>
+
+                                <label for="resend-audience" class="mt3">Audience</label>
+                                <div class="gh-input-icon">
+                                    <select id="resend-audience" class="gh-input-x" value={{this.resendAudience}} {{on "change" this.setResendAudience}}>
+                                        <option value="staff_members">All Staff members</option>
+                                        <option value="newsletter_members">All newsletter members</option>
+                                        <option value="paid_members">All paid members</option>
+                                    </select>
+                                </div>
+
+                                <label for="resend-scheduled-at" class="mt3">Schedule (Taiwan time)</label>
+                                <input
+                                    id="resend-scheduled-at"
+                                    name="resend-scheduled-at"
+                                    type="datetime-local"
+                                    class="gh-input gh-input-x"
+                                    value={{this.resendScheduledAtTaipei}}
+                                    {{on "input" this.setResendScheduledAtTaipei}}
+                                >
+
+                                <div class="gh-btn-group mt3">
+                                    <button type="button" class="gh-btn gh-btn-outline" disabled={{this.isEstimatingResend}} {{on "click" this.estimateResendAudience}}>
+                                        <span>{{if this.isEstimatingResend "Estimating..." "Estimate recipients"}}</span>
+                                    </button>
+                                    <button type="button" class="gh-btn gh-btn-black" disabled={{this.isSendingResend}} {{on "click" this.createAndConfirmResendCampaign}}>
+                                        <span>{{if this.isSendingResend "Submitting..." "Send with confirmation"}}</span>
+                                    </button>
+                                </div>
+
+                                {{#unless (eq this.resendEstimateCount null)}}
+                                    <p class="mt2">Estimated recipients: <strong>{{this.resendEstimateCount}}</strong></p>
+                                {{/unless}}
+                                {{#if this.resendConfirmArmed}}
+                                    <p class="mt1 red">Second confirmation required: click “Send with confirmation” again.</p>
+                                {{/if}}
+
+                                <div class="mt4">
+                                    <div>
+                                        <h5 class="ma0">Campaign history</h5>
+                                        <button type="button" class="gh-btn gh-btn-link" {{on "click" this.loadResendCampaigns}}>
+                                            Refresh
+                                        </button>
+                                    </div>
+                                    {{#if this.resendLastUpdatedAt}}
+                                        <p class="description mt1">Last updated: {{this.resendLastUpdatedAt}}</p>
+                                    {{/if}}
+                                </div>
+
+                                {{#if this.resendCampaigns.length}}
+                                    <div class="mt2">
+                                        {{#each this.resendCampaigns as |campaign|}}
+                                            <details class="gh-box mb2" {{on "toggle" (fn this.selectResendCampaign campaign.id)}}>
+                                                <summary>
+                                                    <strong>{{campaign.status}}</strong>
+                                                    · {{campaign.audience}}
+                                                    · {{campaign.sent_count}} / {{campaign.recipient_count}}
+                                                    · {{campaign.progress_pct}}%
+                                                </summary>
+                                                <div class="mt2">
+                                                    <p class="ma0">Opened: {{campaign.opened_count}} · Clicked: {{campaign.clicked_count}} · Failed: {{campaign.failed_count}}</p>
+                                                    <div class="gh-btn-group mt2">
+                                                        <button type="button" class="gh-btn gh-btn-outline" disabled={{this.isSyncingResend}} {{on "click" (fn this.syncResendCampaign campaign.id)}}>
+                                                            <span>{{if this.isSyncingResend "Syncing..." "Sync metrics"}}</span>
+                                                        </button>
+                                                        <button type="button" class="gh-btn gh-btn-outline" {{on "click" (fn this.exportResendRecipientsCsv campaign.id)}}>
+                                                            <span>Export CSV</span>
+                                                        </button>
+                                                    </div>
+
+                                                    {{#if (eq this.resendSelectedCampaignId campaign.id)}}
+                                                        <div class="mt3">
+                                                            <h6 class="ma0">Recipients (latest 100)</h6>
+                                                            {{#if this.resendRecipients.length}}
+                                                                <ul class="ma0 mt2 pl3">
+                                                                    {{#each this.resendRecipients as |recipient|}}
+                                                                        <li>{{recipient.email}} · {{recipient.status}}{{#if recipient.read_duration_ms}} · {{recipient.read_duration_ms}}ms{{/if}}</li>
+                                                                    {{/each}}
+                                                                </ul>
+                                                            {{else}}
+                                                                <p class="description mt2">No recipients loaded.</p>
+                                                            {{/if}}
+                                                        </div>
+                                                    {{/if}}
+                                                </div>
+                                            </details>
+                                        {{/each}}
+                                    </div>
+                                {{else}}
+                                    <p class="description mt2">No Resend campaigns yet.</p>
+                                {{/if}}
+                            {{else}}
+                                <p class="description">Resend campaigns are available after this post is published.</p>
+                            {{/if}}
+                        </div>
                     </section>
 
                     <ul class="nav-list">

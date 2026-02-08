@@ -39,6 +39,14 @@ module.exports = function apiRoutes() {
     router.put('/posts/:id', mw.authAdminApi, http(api.posts.edit));
     router.del('/posts/:id', mw.authAdminApi, http(api.posts.destroy));
     router.post('/posts/:id/copy', mw.authAdminApi, http(api.posts.copy));
+    router.get('/posts/:id/resend-campaigns', mw.authAdminApi, http(api.resendCampaigns.browseForPost));
+    router.post('/posts/:id/resend-campaigns/estimate', mw.authAdminApi, http(api.resendCampaigns.estimateForPost));
+    router.post('/posts/:id/resend-campaigns', mw.authAdminApi, http(api.resendCampaigns.createForPost));
+    router.post('/posts/:id/resend-campaigns/:campaign_id/confirm', mw.authAdminApi, http(api.resendCampaigns.confirmForPost));
+    router.get('/posts/:id/resend-campaigns/:campaign_id', mw.authAdminApi, http(api.resendCampaigns.readForPost));
+    router.post('/posts/:id/resend-campaigns/:campaign_id/sync', mw.authAdminApi, http(api.resendCampaigns.syncForPost));
+    router.get('/posts/:id/resend-campaigns/:campaign_id/recipients', mw.authAdminApi, http(api.resendCampaigns.browseRecipientsForPost));
+    router.get('/posts/:id/resend-campaigns/:campaign_id/recipients/export', mw.authAdminApi, http(api.resendCampaigns.exportRecipientsCsvForPost));
 
     router.get('/mentions', mw.authAdminApi, http(api.mentions.browse));
 

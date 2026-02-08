@@ -26,6 +26,21 @@ export default class GhPostSettingsMenu extends Component {
     @inject config;
 
     @tracked showPostHistory = false;
+    @tracked resendAudience = 'newsletter_members';
+    @tracked resendScheduledAtTaipei = '';
+    @tracked resendEstimateCount = null;
+    @tracked resendCampaigns = [];
+    @tracked resendRecipients = [];
+    @tracked resendSelectedCampaignId = null;
+    @tracked isLoadingResendCampaigns = false;
+    @tracked isEstimatingResend = false;
+    @tracked isSendingResend = false;
+    @tracked isSyncingResend = false;
+    @tracked isLoadingResendRecipients = false;
+    @tracked resendLastUpdatedAt = null;
+    @tracked resendConfirmArmed = false;
+    _resendPollInterval = null;
+    _resendLoadedPostId = null;
 
     post = null;
     isViewingSubview = false;
@@ -173,6 +188,27 @@ export default class GhPostSettingsMenu extends Component {
         return !this.themeManagement.activeTheme.hasPageBuilderFeature('show_title_and_feature_image');
     }
 
+    get canUseResendCampaigns() {
+        return this.post && !this.post.isNew && this.post.isPublished;
+    }
+
+    get selectedResendCampaign() {
+        return this.resendCampaigns.find(campaign => campaign.id === this.resendSelectedCampaignId) || null;
+    }
+
+    get shouldShowResendRecipients() {
+        return Boolean(this.selectedResendCampaign);
+    }
+
+    didReceiveAttrs() {
+        super.didReceiveAttrs(...arguments);
+
+        if (this.canUseResendCampaigns && this.post.id !== this._resendLoadedPostId) {
+            this._resendLoadedPostId = this.post.id;
+            this.loadResendCampaigns();
+        }
+    }
+
     willDestroyElement() {
         super.willDestroyElement(...arguments);
 
@@ -186,12 +222,217 @@ export default class GhPostSettingsMenu extends Component {
         }
 
         this.setSidebarWidthVariable(0);
+        this.stopResendPolling();
+    }
+
+    stopResendPolling() {
+        if (this._resendPollInterval) {
+            clearInterval(this._resendPollInterval);
+            this._resendPollInterval = null;
+        }
+    }
+
+    startResendPolling() {
+        this.stopResendPolling();
+
+        const hasRunningCampaign = this.resendCampaigns.some((campaign) => {
+            return campaign.status === 'running' || campaign.status === 'scheduled';
+        });
+
+        if (!hasRunningCampaign) {
+            return;
+        }
+
+        this._resendPollInterval = setInterval(() => {
+            this.loadResendCampaigns();
+        }, 3000);
+    }
+
+    @action
+    async loadResendCampaigns() {
+        if (!this.canUseResendCampaigns || this.isLoadingResendCampaigns) {
+            return;
+        }
+
+        this.isLoadingResendCampaigns = true;
+
+        try {
+            const url = this.ghostPaths.url.api(`/posts/${this.post.id}/resend-campaigns`);
+            const response = await this.ajax.request(url, {data: {limit: 20, page: 1}});
+            this.resendCampaigns = response?.resend_campaigns || [];
+            this.resendLastUpdatedAt = new Date();
+
+            if (!this.resendSelectedCampaignId && this.resendCampaigns.length > 0) {
+                this.resendSelectedCampaignId = this.resendCampaigns[0].id;
+            }
+
+            this.startResendPolling();
+        } catch (error) {
+            this.showError(error);
+        } finally {
+            this.isLoadingResendCampaigns = false;
+        }
+    }
+
+    async loadResendRecipients(campaignId) {
+        if (!this.canUseResendCampaigns || !campaignId || this.isLoadingResendRecipients) {
+            return;
+        }
+
+        this.isLoadingResendRecipients = true;
+
+        try {
+            const url = this.ghostPaths.url.api(`/posts/${this.post.id}/resend-campaigns/${campaignId}/recipients`);
+            const response = await this.ajax.request(url, {data: {limit: 100, page: 1}});
+            this.resendRecipients = response?.resend_campaign_recipients || [];
+        } catch (error) {
+            this.showError(error);
+        } finally {
+            this.isLoadingResendRecipients = false;
+        }
     }
 
     @action
     showSubview(subview) {
         this.set('isViewingSubview', true);
         this.set('subview', subview);
+    }
+
+    @action
+    setResendAudience(event) {
+        this.resendAudience = event.target.value;
+        this.resendEstimateCount = null;
+        this.resendConfirmArmed = false;
+    }
+
+    @action
+    setResendScheduledAtTaipei(event) {
+        this.resendScheduledAtTaipei = event.target.value;
+        this.resendConfirmArmed = false;
+    }
+
+    @action
+    async estimateResendAudience() {
+        if (!this.canUseResendCampaigns || this.isEstimatingResend) {
+            return;
+        }
+
+        this.isEstimatingResend = true;
+
+        try {
+            const url = this.ghostPaths.url.api(`/posts/${this.post.id}/resend-campaigns/estimate`);
+            const response = await this.ajax.post(url, {
+                data: {
+                    resend_campaigns: [{
+                        audience: this.resendAudience
+                    }]
+                }
+            });
+
+            this.resendEstimateCount = response?.resend_campaigns?.[0]?.recipient_count ?? 0;
+        } catch (error) {
+            this.showError(error);
+        } finally {
+            this.isEstimatingResend = false;
+        }
+    }
+
+    @action
+    async createAndConfirmResendCampaign() {
+        if (!this.canUseResendCampaigns || this.isSendingResend) {
+            return;
+        }
+
+        this.isSendingResend = true;
+
+        try {
+            if (this.resendEstimateCount === null) {
+                await this.estimateResendAudience();
+            }
+
+            if (!this.resendEstimateCount || this.resendEstimateCount < 1) {
+                this.notifications.showAlert('No recipients found for this audience.', {type: 'warn'});
+                return;
+            }
+
+            if (!this.resendConfirmArmed) {
+                this.resendConfirmArmed = true;
+                this.notifications.showAlert(`Press send again to confirm ${this.resendEstimateCount} recipients.`, {type: 'warn'});
+                return;
+            }
+
+            const createUrl = this.ghostPaths.url.api(`/posts/${this.post.id}/resend-campaigns`);
+            const createResponse = await this.ajax.post(createUrl, {
+                data: {
+                    resend_campaigns: [{
+                        audience: this.resendAudience,
+                        scheduled_at_taipei: this.resendScheduledAtTaipei || null
+                    }]
+                }
+            });
+
+            const createdCampaign = createResponse?.resend_campaigns?.[0];
+            if (!createdCampaign?.id || !createdCampaign?.confirmation_token) {
+                throw new Error('Failed to create Resend campaign.');
+            }
+
+            const confirmUrl = this.ghostPaths.url.api(`/posts/${this.post.id}/resend-campaigns/${createdCampaign.id}/confirm`);
+            await this.ajax.post(confirmUrl, {
+                data: {
+                    resend_campaigns: [{
+                        confirmation_token: createdCampaign.confirmation_token
+                    }]
+                }
+            });
+
+            this.notifications.showAlert(
+                createdCampaign.scheduled_for ? 'Resend campaign scheduled.' : 'Resend campaign started.',
+                {type: 'success'}
+            );
+
+            this.resendConfirmArmed = false;
+            await this.loadResendCampaigns();
+        } catch (error) {
+            this.showError(error);
+        } finally {
+            this.isSendingResend = false;
+        }
+    }
+
+    @action
+    async selectResendCampaign(campaignId) {
+        this.resendSelectedCampaignId = campaignId;
+        await this.loadResendRecipients(campaignId);
+    }
+
+    @action
+    async syncResendCampaign(campaignId) {
+        if (!campaignId || this.isSyncingResend) {
+            return;
+        }
+
+        this.isSyncingResend = true;
+
+        try {
+            const url = this.ghostPaths.url.api(`/posts/${this.post.id}/resend-campaigns/${campaignId}/sync`);
+            await this.ajax.post(url, {data: {}});
+            await this.loadResendCampaigns();
+            await this.loadResendRecipients(campaignId);
+        } catch (error) {
+            this.showError(error);
+        } finally {
+            this.isSyncingResend = false;
+        }
+    }
+
+    @action
+    exportResendRecipientsCsv(campaignId) {
+        if (!campaignId) {
+            return;
+        }
+
+        const url = this.ghostPaths.url.api(`/posts/${this.post.id}/resend-campaigns/${campaignId}/recipients/export`);
+        window.open(url, '_blank', 'noopener');
     }
 
     @action

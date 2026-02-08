@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.zeabur.app/template.json",
+  "build": {
+    "dockerfile": {
+      "path": "./Dockerfile.production",
+      "target": "production"
+    }
+  },
+  "start": {
+    "command": "node index.js"
+  },
+  "ports": [2368],
+  "env": {
+    "NODE_ENV": "production",
+    "url": {
+      "description": "Your Ghost site URL (e.g. https://your-domain.zeabur.app)",
+      "required": true
+    },
+    "database__client": "mysql2",
+    "database__connection__host": {
+      "description": "MySQL host (use Zeabur MySQL service internal hostname)",
+      "required": true
+    },
+    "database__connection__port": {
+      "default": "3306"
+    },
+    "database__connection__user": {
+      "description": "MySQL username",
+      "required": true
+    },
+    "database__connection__password": {
+      "description": "MySQL password",
+      "required": true
+    },
+    "database__connection__database": {
+      "default": "ghost"
+    },
+    "server__host": "0.0.0.0",
+    "server__port": "2368"
+  }
+}

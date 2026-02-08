@@ -339,6 +339,7 @@ async function initServices() {
     const emailAddressService = require('./server/services/email-address');
     const statsService = require('./server/services/stats');
     const explorePingService = require('./server/services/explore-ping');
+    const resendCampaigns = require('./server/services/resend-campaigns');
 
     const urlUtils = require('./shared/url-utils');
 
@@ -378,6 +379,7 @@ async function initServices() {
         donationService.init(),
         recommendationsService.init(),
         statsService.init(),
+        resendCampaigns.init(),
         explorePingService.init()
     ]);
     debug('End: Services');
