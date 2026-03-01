@@ -1,52 +1,78 @@
+# syntax=docker/dockerfile:1-labs
 # Dockerfile.zeabur
 # Build Ghost from monorepo source with built-in Admin panel
-# Target: Zeabur / any container platform using prebuilt image from GHCR
+# Optimized multi-stage build with Docker layer caching
 
 ARG NODE_VERSION=22.18.0
 
-# ---- Stage 1: Builder ----
+# ---- Stage 1: Build everything ----
 FROM node:$NODE_VERSION-bookworm AS builder
 
 WORKDIR /build
 
-# Copy everything (we need the full monorepo for building)
-COPY . .
+# Copy dependency-definition files first for better cache reuse
+COPY package.json yarn.lock ./
+COPY ghost/core/package.json ghost/core/
+COPY ghost/admin/package.json ghost/admin/
+COPY ghost/i18n/package.json ghost/i18n/
+COPY ghost/parse-email-address/package.json ghost/parse-email-address/
+COPY apps/shade/package.json apps/shade/
+COPY apps/admin-x-design-system/package.json apps/admin-x-design-system/
+COPY apps/admin-x-framework/package.json apps/admin-x-framework/
+COPY apps/admin-x-settings/package.json apps/admin-x-settings/
+COPY apps/activitypub/package.json apps/activitypub/
+COPY apps/posts/package.json apps/posts/
+COPY apps/stats/package.json apps/stats/
+COPY apps/portal/package.json apps/portal/
+COPY apps/comments-ui/package.json apps/comments-ui/
+COPY apps/signup-form/package.json apps/signup-form/
+COPY apps/sodo-search/package.json apps/sodo-search/
+COPY apps/announcement-bar/package.json apps/announcement-bar/
+COPY apps/admin/package.json apps/admin/
+COPY e2e/package.json e2e/
 
 # Install all dependencies (including devDependencies for building)
-RUN yarn install --frozen-lockfile --network-timeout 600000
+# Retry up to 3 times to handle transient registry errors (502, timeout, etc.)
+RUN --mount=type=cache,target=/usr/local/share/.cache/yarn/v6 \
+    yarn install --frozen-lockfile --network-timeout 600000 --network-concurrency 1 || \
+    yarn install --frozen-lockfile --network-timeout 600000 --network-concurrency 1 || \
+    yarn install --frozen-lockfile --network-timeout 600000 --network-concurrency 1
 
-# Build everything: TSC + assets + Admin panel (Ember + React apps)
-RUN npx nx run ghost:build:tsc && \
-    npx nx run ghost:build:assets && \
-    npx nx run @tryghost/admin:build
+# Copy full source code (node_modules excluded by .dockerignore)
+COPY . .
 
-# Prepare a standalone production package using npm pack
+# COPY overwrites workspace subdirectories, destroying yarn's symlink structure.
+# Remove the integrity file to force yarn to re-link everything from cache.
+RUN rm -rf node_modules/.yarn-integrity
+RUN --mount=type=cache,target=/usr/local/share/.cache/yarn/v6 \
+    yarn install --frozen-lockfile --network-timeout 600000
+
+# Build TypeScript, frontend assets, and Admin panel (Ember + React apps)
+# Nx handles dependency ordering automatically
+RUN ./node_modules/.bin/nx run ghost:build:tsc && \
+    ./node_modules/.bin/nx run ghost:build:assets && \
+    ./node_modules/.bin/nx run @tryghost/admin:build
+
+# Create self-contained package via npm pack
+# monobundle.js (prepack script) automatically:
+#   - Bundles private workspace deps as tarballs into components/
+#   - Rewrites package.json with file: references
+#   - Copies yarn.lock from repo root
+# The admin build is included in the pack (not excluded by .npmignore)
 WORKDIR /build/ghost/core
 RUN npm pack && \
     mkdir -p /output && \
-    tar -xzf ghost-*.tgz -C /output && \
-    cp /build/yarn.lock /output/package/
+    tar -xzf ghost-*.tgz -C /output
 
-# Install production dependencies in the standalone package
+# Install production-only dependencies in the standalone package
 WORKDIR /output/package
-RUN yarn install --production --ignore-scripts --network-timeout 600000 || true
+RUN --mount=type=cache,target=/usr/local/share/.cache/yarn/v6 \
+    yarn install --production --ignore-scripts --prefer-offline --network-timeout 600000
 
-# Manually copy internal monorepo deps that yarn can't resolve from registry
-RUN for dep in $(node -e "const p=require('./package.json'); Object.keys(p.dependencies||{}).filter(d=>d.startsWith('@tryghost/')).forEach(d=>console.log(d))"); do \
-      dep_path="/build/node_modules/${dep}"; \
-      if [ -d "$dep_path" ]; then \
-        mkdir -p "node_modules/${dep}" && \
-        cp -r "$dep_path"/. "node_modules/${dep}/"; \
-      fi; \
-    done
+# Build sqlite3 native bindings (node:bookworm includes build tools)
+RUN cd node_modules/sqlite3 && npm run install
 
-# Build sqlite3 native bindings
-RUN cd node_modules/sqlite3 && npm run install 2>/dev/null || true
-
-# Copy built admin into the package
-RUN cp -r /build/ghost/core/core/built/admin core/built/admin
-
-# ---- Stage 2: Production ----
+# ---- Stage 2: Production runtime ----
 FROM node:$NODE_VERSION-bookworm-slim AS production
 
 ENV NODE_ENV=production
@@ -60,19 +86,26 @@ RUN apt-get update && \
 
 WORKDIR /home/ghost
 
-# Copy the fully prepared package from builder
 COPY --from=builder /output/package/ ./
 
-# Override production config to use stdout logging and sqlite3 by default
-# Users can override database settings via env vars on the platform
-RUN echo '{\
-  "database": {"client": "sqlite3", "connection": {"filename": "content/data/ghost.db"}},\
-  "logging": {"level": "info", "transports": ["stdout"], "rotation": {"enabled": false}}\
+# Create content backups and log directory (matches Dockerfile.production)
+RUN mkdir -p log && \
+    cp -R content base_content && \
+    mkdir -p default && \
+    cp -R content/themes/casper default/casper && \
+    ([ -d content/themes/source ] && cp -R content/themes/source default/source || true)
+
+# Override production config for container usage (sqlite3 + stdout logging)
+# Users override database settings via environment variables on the platform
+RUN printf '{\n\
+  "database": {"client": "sqlite3", "connection": {"filename": "content/data/ghost.db"}},\n\
+  "logging": {"level": "info", "transports": ["stdout"], "rotation": {"enabled": false}}\n\
 }' > core/shared/config/env/config.production.json
 
-# Ensure content directories exist and set permissions
-RUN mkdir -p content/data content/images content/media content/files content/logs content/themes && \
-    chown -R ghost:ghost /home/ghost
+# Set ownership: code as nobody:nogroup (read-only), content/logs as ghost:ghost (writable)
+RUN chown ghost:ghost /home/ghost && \
+    chown -R nobody:nogroup /home/ghost/* && \
+    chown -R ghost:ghost /home/ghost/content /home/ghost/log /home/ghost/base_content
 
 USER ghost
 

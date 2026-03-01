@@ -12,6 +12,7 @@ test-results
 tsconfig.tsbuildinfo
 
 e2e
+!e2e/package.json
 docker
 
 # Ignore existing built admin (will rebuild inside container)
