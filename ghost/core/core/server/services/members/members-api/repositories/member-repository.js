@@ -9,6 +9,8 @@ const {NotFoundError} = require('@tryghost/errors');
 const validator = require('@tryghost/validator');
 const crypto = require('crypto');
 const hasActiveOffer = require('../utils/has-active-offer');
+const StartOutboxProcessingEvent = require('../../../outbox/events/start-outbox-processing-event');
+const {MEMBER_WELCOME_EMAIL_SLUGS} = require('../../../member-welcome-emails/constants');
 const messages = {
     noStripeConnection: 'Cannot {action} without a Stripe Connection',
     moreThanOneProduct: 'A member cannot have more than one Product',
@@ -34,6 +36,8 @@ const messages = {
 };
 
 const SUBSCRIPTION_STATUS_TRIALING = 'trialing';
+
+const WELCOME_EMAIL_SOURCES = ['member'];
 
 /**
  * @typedef {object} ITokenService
@@ -351,12 +355,56 @@ module.exports = class MemberRepository {
         const memberAddOptions = {...(options || {}), withRelated};
         let member;
 
-        // Free welcome email has been intentionally disabled — just create the member
-        member = await this._Member.add({
-            ...memberData,
-            ...memberStatusData,
-            labels
-        }, memberAddOptions);
+        const isFreeSignup = !stripeCustomer;
+        const shouldCheckFreeWelcomeEmail = WELCOME_EMAIL_SOURCES.includes(source) && isFreeSignup;
+        let isFreeWelcomeEmailActive = false;
+
+        if (shouldCheckFreeWelcomeEmail) {
+            const freeWelcomeEmail = this._AutomatedEmail ? await this._AutomatedEmail.findOne({slug: MEMBER_WELCOME_EMAIL_SLUGS.free}) : null;
+            isFreeWelcomeEmailActive = freeWelcomeEmail && freeWelcomeEmail.get('lexical') && freeWelcomeEmail.get('status') === 'active';
+        }
+
+        if (isFreeWelcomeEmailActive && isFreeSignup) {
+            const runMemberCreation = async (transacting) => {
+                const newMember = await this._Member.add({
+                    ...memberData,
+                    ...memberStatusData,
+                    labels
+                }, {...memberAddOptions, transacting});
+
+                const timestamp = eventData.created_at || newMember.get('created_at');
+
+                await this._Outbox.add({
+                    id: ObjectId().toHexString(),
+                    event_type: MemberCreatedEvent.name,
+                    payload: JSON.stringify({
+                        memberId: newMember.id,
+                        uuid: newMember.get('uuid'),
+                        email: newMember.get('email'),
+                        name: newMember.get('name'),
+                        source,
+                        timestamp,
+                        status: 'free'
+                    })
+                }, {transacting});
+
+                return newMember;
+            };
+
+            if (memberAddOptions.transacting) {
+                member = await runMemberCreation(memberAddOptions.transacting);
+            } else {
+                member = await this._Member.transaction(runMemberCreation);
+            }
+
+            this.dispatchEvent(StartOutboxProcessingEvent.create({memberId: member.id}), memberAddOptions);
+        } else {
+            member = await this._Member.add({
+                ...memberData,
+                ...memberStatusData,
+                labels
+            }, memberAddOptions);
+        }
 
         if (!eventData.created_at) {
             eventData.created_at = member.get('created_at');
@@ -1416,7 +1464,33 @@ module.exports = class MemberRepository {
                 ...eventData
             }, options);
 
-            // Paid welcome email has been intentionally disabled
+            const context = options?.context || {};
+            const source = this._resolveContextSource(context);
+            const shouldSendPaidWelcomeEmail = WELCOME_EMAIL_SOURCES.includes(source);
+            let isPaidWelcomeEmailActive = false;
+            if (shouldSendPaidWelcomeEmail && this._AutomatedEmail) {
+                const paidWelcomeEmail = await this._AutomatedEmail.findOne({slug: MEMBER_WELCOME_EMAIL_SLUGS.paid}, options);
+                isPaidWelcomeEmailActive = paidWelcomeEmail && paidWelcomeEmail.get('lexical') && paidWelcomeEmail.get('status') === 'active';
+            }
+            // Send paid welcome email if:
+            // 1. The paid welcome email is active
+            // 2. The member status changed to 'paid'
+            if (updatedMember.get('status') === 'paid' && isPaidWelcomeEmailActive) {
+                await this._Outbox.add({
+                    id: ObjectId().toHexString(),
+                    event_type: MemberCreatedEvent.name,
+                    payload: JSON.stringify({
+                        memberId: memberModel.id,
+                        uuid: memberModel.get('uuid'),
+                        email: memberModel.get('email'),
+                        name: memberModel.get('name'),
+                        source,
+                        timestamp: subscriptionData.start_date || updatedMember.get('updated_at') || new Date(),
+                        status: 'paid'
+                    })
+                }, options);
+                this.dispatchEvent(StartOutboxProcessingEvent.create({memberId: memberModel.id}), options);
+            }
         }
     }
 
