@@ -9,6 +9,7 @@ const {NotFoundError} = require('@tryghost/errors');
 const validator = require('@tryghost/validator');
 const crypto = require('crypto');
 const hasActiveOffer = require('../utils/has-active-offer');
+const {isAllowedStripeProduct} = require('../../../stripe/services/webhook/stripe-product-filter');
 const StartOutboxProcessingEvent = require('../../../outbox/events/start-outbox-processing-event');
 const {MEMBER_WELCOME_EMAIL_SLUGS} = require('../../../member-welcome-emails/constants');
 const messages = {
@@ -1020,6 +1021,11 @@ module.exports = class MemberRepository {
         const subscriptionPriceData = _.get(stripeSubscriptionData, 'items.data[0].price');
         let ghostProduct;
         try {
+            // First check: env var whitelist (fast, no DB call)
+            if (!isAllowedStripeProduct(subscriptionPriceData.product)) {
+                return;
+            }
+
             ghostProduct = await this._productRepository.get({stripe_product_id: subscriptionPriceData.product}, options);
             if (!ghostProduct) {
                 // Subscription is for a product not created by Ghost - ignore it

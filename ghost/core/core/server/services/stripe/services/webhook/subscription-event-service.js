@@ -1,6 +1,7 @@
 const errors = require('@tryghost/errors');
 const logging = require('@tryghost/logging');
 const _ = require('lodash');
+const {getProductIdFromSubscription, isAllowedStripeProduct} = require('./stripe-product-filter');
 
 /**
  * Handles `customer.subscription.*` webhook events
@@ -34,15 +35,10 @@ module.exports = class SubscriptionEventService {
             return;
         }
 
-        // Check if the subscription's product belongs to Ghost
-        const stripeProductId = _.get(subscription, 'items.data[0].price.product');
-        if (stripeProductId) {
-            const productRepository = this.deps.productRepository;
-            const ghostProduct = await productRepository.get({stripe_product_id: stripeProductId});
-            if (!ghostProduct) {
-                logging.info(`Ignoring subscription event for non-Ghost product ${stripeProductId} (subscription: ${subscription.id})`);
-                return;
-            }
+        // Check if the subscription's product is allowed by env var whitelist
+        const stripeProductId = getProductIdFromSubscription(subscription);
+        if (stripeProductId && !isAllowedStripeProduct(stripeProductId)) {
+            return;
         }
 
         const memberRepository = this.deps.memberRepository;

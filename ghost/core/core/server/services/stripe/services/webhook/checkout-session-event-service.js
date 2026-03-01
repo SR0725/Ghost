@@ -1,6 +1,7 @@
 const _ = require('lodash');
 const errors = require('@tryghost/errors');
 const logging = require('@tryghost/logging');
+const {getProductIdFromSubscription, isAllowedStripeProduct} = require('./stripe-product-filter');
 const {
     canWelcomeEmailReplaceSignupPaidEmail
 } = require('../../../lib/member-signup-contexts');
@@ -197,11 +198,17 @@ module.exports = class CheckoutSessionEventService {
         }
 
         for (const subscription of subscriptionsToProcess) {
-            const subProductId = _.get(subscription, 'items.data[0].price.product') || _.get(subscription, 'plan.product');
+            const subProductId = getProductIdFromSubscription(subscription);
             if (!subProductId) {
                 continue;
             }
 
+            // First check: env var whitelist (fast, no DB call)
+            if (!isAllowedStripeProduct(subProductId)) {
+                continue;
+            }
+
+            // Second check: must exist as a Ghost product in DB
             const ghostProduct = await productRepository.get({stripe_product_id: subProductId});
             if (!ghostProduct) {
                 logging.info(`Ignoring subscription ${subscription.id} for non-Ghost product ${subProductId} during checkout`);

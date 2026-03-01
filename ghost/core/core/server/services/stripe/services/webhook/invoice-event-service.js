@@ -1,5 +1,5 @@
 const errors = require('@tryghost/errors');
-// const _ = require('lodash');
+const {isAllowedStripeProduct} = require('./stripe-product-filter');
 
 /**
  * Handles `invoice.payment_succeeded` webhook events
@@ -42,7 +42,12 @@ module.exports = class InvoiceEventService {
             return;
         }
 
-        // Subscription is for a different product - ignore.
+        // First check: env var whitelist (fast, no DB call)
+        if (!isAllowedStripeProduct(subscription.plan.product)) {
+            return;
+        }
+
+        // Second check: must exist as a Ghost product in DB
         const product = await productRepository.get({
             stripe_product_id: subscription.plan.product
         });
