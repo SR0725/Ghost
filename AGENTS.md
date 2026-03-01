@@ -95,6 +95,32 @@ yarn docker:clean              # Stop containers, remove volumes and local image
 yarn docker:down               # Stop containers
 ```
 
+### Production Docker Build & Push (GHCR)
+
+Ghost 使用 `Dockerfile.zeabur` 從 monorepo 原始碼建置完整的 production Docker image，並推送到 GitHub Container Registry (ghcr.io)。
+
+**前置準備：**
+- `.env` 檔案需包含 `GHCR_TOKEN` 和 `GHCR_USER`（已在 `.gitignore` 中）
+
+**完整流程：**
+```bash
+# 1. 從 .env 讀取 token 並登入 ghcr.io
+source .env
+echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+# 2. 建置 amd64 架構的 production image
+docker build --platform linux/amd64 --target production -t ghcr.io/sr0725/ghost:latest -f Dockerfile.zeabur .
+
+# 3. 推送到 GHCR
+docker push ghcr.io/sr0725/ghost:latest
+```
+
+**注意事項：**
+- 必須使用 `--platform linux/amd64` 架構（部署目標為 amd64）
+- 建置使用 `Dockerfile.zeabur`，**不要修改此檔案**，除非明確被要求
+- 建置時間較長（10-20 分鐘），因為需要完整編譯 monorepo（yarn install + nx build + npm pack）
+- Image tag: `ghcr.io/sr0725/ghost:latest`
+
 ### How yarn dev works
 
 The `yarn dev` command uses a **hybrid Docker + host development** setup:

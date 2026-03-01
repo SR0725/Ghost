@@ -179,9 +179,24 @@ module.exports = class CheckoutSessionEventService {
         const memberRepository = this.deps.memberRepository;
         const productRepository = this.deps.productRepository;
         const checkoutType = _.get(session, 'metadata.checkoutType');
+        const checkoutSubscriptionId = session.subscription;
 
         const ghostSubscriptions = [];
-        for (const subscription of customer.subscriptions?.data || []) {
+        let subscriptionsToProcess = customer.subscriptions?.data || [];
+
+        // Restrict processing to the checkout session subscription to avoid
+        // accidentally acting on unrelated subscriptions on the same customer.
+        if (checkoutSubscriptionId) {
+            let checkoutSubscription = subscriptionsToProcess.find(subscription => subscription.id === checkoutSubscriptionId);
+            if (!checkoutSubscription) {
+                checkoutSubscription = await this.api.getSubscription(checkoutSubscriptionId, {
+                    expand: ['default_payment_method']
+                });
+            }
+            subscriptionsToProcess = checkoutSubscription ? [checkoutSubscription] : [];
+        }
+
+        for (const subscription of subscriptionsToProcess) {
             const subProductId = _.get(subscription, 'items.data[0].price.product') || _.get(subscription, 'plan.product');
             if (!subProductId) {
                 continue;

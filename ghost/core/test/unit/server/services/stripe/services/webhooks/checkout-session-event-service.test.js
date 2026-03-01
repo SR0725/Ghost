@@ -564,6 +564,7 @@ describe('CheckoutSessionEventService', function () {
             service = createService();
             session = {
                 customer: 'cust_123',
+                subscription: 'sub_123',
                 metadata: {
                     name: 'Metadata Name',
                     newsletters: JSON.stringify([{id: 1, name: 'Newsletter'}]),
@@ -626,6 +627,61 @@ describe('CheckoutSessionEventService', function () {
             sinon.assert.notCalled(memberRepository.create);
             sinon.assert.notCalled(memberRepository.linkSubscription);
             sinon.assert.notCalled(sendSignupEmail);
+        });
+
+        it('should ignore non-Ghost checkout subscription even if customer has another Ghost subscription', async function () {
+            session.subscription = 'sub_non_ghost';
+
+            customer.subscriptions.data.push({
+                id: 'sub_non_ghost',
+                items: {
+                    data: [{
+                        price: {
+                            product: 'prod_non_ghost'
+                        }
+                    }]
+                },
+                default_payment_method: {
+                    billing_details: {name: 'Other Product Customer'}
+                }
+            });
+
+            api.getCustomer.resolves(customer);
+            memberRepository.get.resolves(null);
+            productRepository.get.withArgs({stripe_product_id: 'prod_non_ghost'}).resolves(null);
+            productRepository.get.withArgs({stripe_product_id: 'prod_ghost'}).resolves({id: 'ghost_product_123'});
+
+            await service.handleSubscriptionEvent(session);
+
+            sinon.assert.notCalled(memberRepository.create);
+            sinon.assert.notCalled(memberRepository.linkSubscription);
+            sinon.assert.notCalled(sendSignupEmail);
+        });
+
+        it('should fetch checkout subscription by id when not expanded on customer', async function () {
+            session.subscription = 'sub_checkout_only';
+            customer.subscriptions.data = [];
+
+            api.getCustomer.resolves(customer);
+            api.getSubscription.resolves({
+                id: 'sub_checkout_only',
+                items: {
+                    data: [{
+                        price: {
+                            product: 'prod_ghost'
+                        }
+                    }]
+                },
+                default_payment_method: {
+                    billing_details: {name: 'Customer Name'}
+                }
+            });
+            memberRepository.get.resolves(null);
+
+            await service.handleSubscriptionEvent(session);
+
+            sinon.assert.calledWith(api.getSubscription, 'sub_checkout_only', {expand: ['default_payment_method']});
+            sinon.assert.calledOnce(memberRepository.create);
         });
 
         it('should create new member if not found', async function () {
