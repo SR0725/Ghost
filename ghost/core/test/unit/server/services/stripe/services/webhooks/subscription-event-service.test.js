@@ -6,11 +6,15 @@ const SubscriptionEventService = require('../../../../../../../core/server/servi
 describe('SubscriptionEventService', function () {
     let service;
     let memberRepository;
+    let productRepository;
 
     beforeEach(function () {
         memberRepository = {get: sinon.stub(), linkSubscription: sinon.stub(), removeComplimentarySubscription: sinon.stub()};
+        productRepository = {get: sinon.stub()};
+        // By default, product exists in Ghost (is a Ghost product)
+        productRepository.get.resolves({id: 'ghost_product_123'});
 
-        service = new SubscriptionEventService({memberRepository});
+        service = new SubscriptionEventService({memberRepository, productRepository});
     });
 
     it('should throw BadRequestError if subscription has no price item', async function () {
@@ -28,10 +32,48 @@ describe('SubscriptionEventService', function () {
         }
     });
 
+    it('should ignore subscription event for non-Ghost product', async function () {
+        const subscription = {
+            id: 'sub_456',
+            items: {
+                data: [{price: {id: 'price_123', product: 'prod_non_ghost'}}]
+            },
+            customer: 'cust_123'
+        };
+
+        productRepository.get.resolves(null);
+
+        await service.handleSubscriptionEvent(subscription);
+
+        sinon.assert.calledWith(productRepository.get, {stripe_product_id: 'prod_non_ghost'});
+        sinon.assert.notCalled(memberRepository.get);
+        sinon.assert.notCalled(memberRepository.linkSubscription);
+    });
+
+    it('should process subscription event for Ghost product', async function () {
+        const subscription = {
+            id: 'sub_789',
+            items: {
+                data: [{price: {id: 'price_123', product: 'prod_ghost'}}]
+            },
+            customer: 'cust_123'
+        };
+
+        productRepository.get.resolves({id: 'ghost_product_123'});
+        memberRepository.get
+            .onFirstCall().resolves({id: 'member_123'})
+            .onSecondCall().resolves({get: sinon.stub().returns('free')});
+
+        await service.handleSubscriptionEvent(subscription);
+
+        sinon.assert.calledWith(productRepository.get, {stripe_product_id: 'prod_ghost'});
+        sinon.assert.calledWith(memberRepository.linkSubscription, {id: 'member_123', subscription});
+    });
+
     it('should throw ConflictError if linkSubscription fails with ER_DUP_ENTRY', async function () {
         const subscription = {
             items: {
-                data: [{price: {id: 'price_123'}}]
+                data: [{price: {id: 'price_123', product: 'prod_ghost'}}]
             },
             customer: 'cust_123'
         };

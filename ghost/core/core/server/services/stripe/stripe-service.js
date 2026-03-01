@@ -80,6 +80,9 @@ module.exports = class StripeService {
         const subscriptionEventService = new SubscriptionEventService({
             get memberRepository(){
                 return membersService.api.members;
+            },
+            get productRepository(){
+                return membersService.api.productRepository;
             }
         });
 

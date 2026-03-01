@@ -5,7 +5,7 @@ const sinon = require('sinon');
 const CheckoutSessionEventService = require('../../../../../../../core/server/services/stripe/services/webhook/checkout-session-event-service');
 
 describe('CheckoutSessionEventService', function () {
-    let api, memberRepository, donationRepository, staffServiceEmails, sendSignupEmail, isPaidWelcomeEmailActive;
+    let api, memberRepository, productRepository, donationRepository, staffServiceEmails, sendSignupEmail, isPaidWelcomeEmailActive;
 
     beforeEach(function () {
         api = {
@@ -27,6 +27,12 @@ describe('CheckoutSessionEventService', function () {
             removeComplimentarySubscription: sinon.stub()
         };
 
+        productRepository = {
+            get: sinon.stub()
+        };
+        // By default, product exists in Ghost (is a Ghost product)
+        productRepository.get.resolves({id: 'ghost_product_123'});
+
         donationRepository = {
             save: sinon.stub()
         };
@@ -43,6 +49,7 @@ describe('CheckoutSessionEventService', function () {
         return new CheckoutSessionEventService({
             api,
             memberRepository,
+            productRepository,
             donationRepository,
             staffServiceEmails,
             sendSignupEmail,

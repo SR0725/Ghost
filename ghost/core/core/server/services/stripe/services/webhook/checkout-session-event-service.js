@@ -237,7 +237,18 @@ module.exports = class CheckoutSessionEventService {
                 email: customer.email
             });
 
+            const productRepository = this.deps.productRepository;
             for (const subscription of customer.subscriptions.data) {
+                // Filter out subscriptions for products not created by Ghost
+                const subProductId = _.get(subscription, 'items.data[0].price.product') || _.get(subscription, 'plan.product');
+                if (subProductId) {
+                    const ghostProduct = await productRepository.get({stripe_product_id: subProductId});
+                    if (!ghostProduct) {
+                        logging.info(`Ignoring subscription ${subscription.id} for non-Ghost product ${subProductId} during checkout`);
+                        continue;
+                    }
+                }
+
                 try {
                     const offerId = session.metadata?.offer;
 

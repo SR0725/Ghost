@@ -1021,9 +1021,10 @@ module.exports = class MemberRepository {
         let ghostProduct;
         try {
             ghostProduct = await this._productRepository.get({stripe_product_id: subscriptionPriceData.product}, options);
-            // Use first Ghost product as default product in case of missing link
             if (!ghostProduct) {
-                ghostProduct = await this._productRepository.getDefaultProduct(options);
+                // Subscription is for a product not created by Ghost - ignore it
+                logging.warn(`Ignoring subscription ${stripeSubscriptionData.id} for non-Ghost Stripe product ${subscriptionPriceData.product}`);
+                return;
             }
 
             // Link Stripe Product & Price to Ghost Product
