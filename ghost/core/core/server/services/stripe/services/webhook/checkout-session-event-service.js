@@ -177,12 +177,33 @@ module.exports = class CheckoutSessionEventService {
         });
 
         const memberRepository = this.deps.memberRepository;
+        const productRepository = this.deps.productRepository;
+        const checkoutType = _.get(session, 'metadata.checkoutType');
+
+        const ghostSubscriptions = [];
+        for (const subscription of customer.subscriptions?.data || []) {
+            const subProductId = _.get(subscription, 'items.data[0].price.product') || _.get(subscription, 'plan.product');
+            if (!subProductId) {
+                continue;
+            }
+
+            const ghostProduct = await productRepository.get({stripe_product_id: subProductId});
+            if (!ghostProduct) {
+                logging.info(`Ignoring subscription ${subscription.id} for non-Ghost product ${subProductId} during checkout`);
+                continue;
+            }
+
+            ghostSubscriptions.push(subscription);
+        }
 
         let member = await memberRepository.get({
             email: customer.email
         });
 
-        const checkoutType = _.get(session, 'metadata.checkoutType');
+        if (ghostSubscriptions.length === 0) {
+            logging.info(`Ignoring checkout.session.completed ${session.id || '(unknown id)'} because no Ghost subscriptions were found on customer ${customer.id}`);
+            return;
+        }
 
         if (!member) {
             const metadataName = _.get(session, 'metadata.name');
@@ -211,7 +232,13 @@ module.exports = class CheckoutSessionEventService {
             const offerId = session.metadata?.offer;
             const memberDataWithStripeCustomer = {
                 ...memberData,
-                stripeCustomer: customer,
+                stripeCustomer: {
+                    ...customer,
+                    subscriptions: {
+                        ...customer.subscriptions,
+                        data: ghostSubscriptions
+                    }
+                },
                 offerId
             };
             member = await memberRepository.create(memberDataWithStripeCustomer);
@@ -237,18 +264,7 @@ module.exports = class CheckoutSessionEventService {
                 email: customer.email
             });
 
-            const productRepository = this.deps.productRepository;
-            for (const subscription of customer.subscriptions.data) {
-                // Filter out subscriptions for products not created by Ghost
-                const subProductId = _.get(subscription, 'items.data[0].price.product') || _.get(subscription, 'plan.product');
-                if (subProductId) {
-                    const ghostProduct = await productRepository.get({stripe_product_id: subProductId});
-                    if (!ghostProduct) {
-                        logging.info(`Ignoring subscription ${subscription.id} for non-Ghost product ${subProductId} during checkout`);
-                        continue;
-                    }
-                }
-
+            for (const subscription of ghostSubscriptions) {
                 try {
                     const offerId = session.metadata?.offer;
 

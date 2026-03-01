@@ -584,6 +584,14 @@ describe('CheckoutSessionEventService', function () {
                 subscriptions: {
                     data: [
                         {
+                            id: 'sub_123',
+                            items: {
+                                data: [{
+                                    price: {
+                                        product: 'prod_ghost'
+                                    }
+                                }]
+                            },
                             default_payment_method: {
                                 billing_details: {name: 'Customer Name'}
                             }
@@ -606,6 +614,18 @@ describe('CheckoutSessionEventService', function () {
 
             sinon.assert.calledWith(api.getCustomer, 'cust_123', {expand: ['subscriptions.data.default_payment_method']});
             sinon.assert.calledWith(memberRepository.get, {email: 'customer@example.com'});
+        });
+
+        it('should ignore checkout subscription flow when no Ghost subscription is present', async function () {
+            api.getCustomer.resolves(customer);
+            memberRepository.get.resolves(null);
+            productRepository.get.resolves(null);
+
+            await service.handleSubscriptionEvent(session);
+
+            sinon.assert.notCalled(memberRepository.create);
+            sinon.assert.notCalled(memberRepository.linkSubscription);
+            sinon.assert.notCalled(sendSignupEmail);
         });
 
         it('should create new member if not found', async function () {

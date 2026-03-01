@@ -57,7 +57,7 @@ describe('InvoiceEventService', function () {
     it('should throw NotFoundError if no member is found for subscription customer', async function () {
         const invoice = {
             customer: 'cust_123',
-            plan: 'plan_123',
+            plan: {product: 'product_123'},
             subscription: 'sub_123'
         };
         apiStub.getSubscription.resolves(invoice);
@@ -88,7 +88,6 @@ describe('InvoiceEventService', function () {
             plan: null
         };
         apiStub.getSubscription.resolves(invoice);
-        memberRepositoryStub.get.resolves(null);
         productRepositoryStub.get.resolves(null);
 
         await service.handleInvoiceEvent(invoice);
@@ -98,30 +97,29 @@ describe('InvoiceEventService', function () {
         // sinon.assert.notCalled(productRepositoryStub.get);
 
         sinon.assert.calledOnce(apiStub.getSubscription);
-        sinon.assert.calledOnce(memberRepositoryStub.get);
+        sinon.assert.notCalled(memberRepositoryStub.get);
         sinon.assert.notCalled(productRepositoryStub.get);
     });
 
     it('should return early if product is not found', async function () {
         const invoice = {
             subscription: 'sub_123',
-            plan: 'plan_123'
+            plan: {product: 'product_123'}
         };
         apiStub.getSubscription.resolves(invoice);
-        memberRepositoryStub.get.resolves(null);
         productRepositoryStub.get.resolves(null);
 
         await service.handleInvoiceEvent(invoice);
 
         sinon.assert.calledOnce(apiStub.getSubscription);
-        sinon.assert.calledOnce(memberRepositoryStub.get);
         sinon.assert.calledOnce(productRepositoryStub.get);
+        sinon.assert.notCalled(memberRepositoryStub.get);
     });
 
     it('can registerPayment', async function () {
         const invoice = {
             subscription: 'sub_123',
-            plan: 'plan_123',
+            plan: {product: 'product_123'},
             amount_paid: 100,
             paid: true
         };
@@ -138,7 +136,7 @@ describe('InvoiceEventService', function () {
     it('should not registerPayment if invoice is not paid', async function () {
         const invoice = {
             subscription: 'sub_123',
-            plan: 'plan_123',
+            plan: {product: 'product_123'},
             amount_paid: 0,
             paid: false
         };
@@ -155,7 +153,7 @@ describe('InvoiceEventService', function () {
     it('should not registerPayment if invoice amount paid is 0', async function () {
         const invoice = {
             subscription: 'sub_123',
-            plan: 'plan_123',
+            plan: {product: 'product_123'},
             amount_paid: 0,
             paid: true
         };
@@ -172,7 +170,7 @@ describe('InvoiceEventService', function () {
     it('should not register payment if amount paid is 0 and invoice is not paid', async function () {
         const invoice = {
             subscription: 'sub_123',
-            plan: 'plan_123',
+            plan: {product: 'product_123'},
             amount_paid: 0,
             paid: false
         };
@@ -188,7 +186,7 @@ describe('InvoiceEventService', function () {
     it('should not registerPayment if member is not found', async function () {
         const invoice = {
             subscription: 'sub_123',
-            plan: 'plan_123',
+            plan: {product: 'product_123'},
             amount_paid: 100,
             paid: true
         };

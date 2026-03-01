@@ -17,19 +17,17 @@ describe('SubscriptionEventService', function () {
         service = new SubscriptionEventService({memberRepository, productRepository});
     });
 
-    it('should throw BadRequestError if subscription has no price item', async function () {
+    it('should ignore subscription event if it has no price item', async function () {
         const subscription = {
             items: {
                 data: []
             }
         };
 
-        try {
-            await service.handleSubscriptionEvent(subscription);
-            assert.fail('Expected BadRequestError');
-        } catch (err) {
-            assert.equal(err.message, 'Subscription should have exactly 1 price item');
-        }
+        await service.handleSubscriptionEvent(subscription);
+
+        sinon.assert.notCalled(memberRepository.get);
+        sinon.assert.notCalled(memberRepository.linkSubscription);
     });
 
     it('should ignore subscription event for non-Ghost product', async function () {

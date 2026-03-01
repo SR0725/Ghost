@@ -37,6 +37,19 @@ module.exports = class InvoiceEventService {
             expand: ['default_payment_method']
         });
 
+        // Subscription has more than one plan - meaning it is not one created by us - ignore.
+        if (!subscription.plan) {
+            return;
+        }
+
+        // Subscription is for a different product - ignore.
+        const product = await productRepository.get({
+            stripe_product_id: subscription.plan.product
+        });
+        if (!product) {
+            return;
+        }
+
         const member = await memberRepository.get({
             customer_id: subscription.customer
         });
@@ -50,17 +63,6 @@ module.exports = class InvoiceEventService {
                 });
             }
         } else {
-            // Subscription has more than one plan - meaning it is not one created by us - ignore.
-            if (!subscription.plan) {
-                return;
-            }
-            // Subscription is for a different product - ignore.
-            const product = await productRepository.get({
-                stripe_product_id: subscription.plan.product
-            });
-            if (!product) {
-                return;
-            }
             // Could not find the member, which we need in order to insert an payment event.
             throw new errors.NotFoundError({
                 message: `No member found for customer ${subscription.customer}`

@@ -30,9 +30,8 @@ module.exports = class SubscriptionEventService {
     async handleSubscriptionEvent(subscription) {
         const subscriptionPriceData = _.get(subscription, 'items.data');
         if (!subscriptionPriceData || subscriptionPriceData.length !== 1) {
-            throw new errors.BadRequestError({
-                message: 'Subscription should have exactly 1 price item'
-            });
+            logging.info(`Ignoring subscription event ${subscription.id || '(unknown id)'} because it does not have exactly 1 price item`);
+            return;
         }
 
         // Check if the subscription's product belongs to Ghost

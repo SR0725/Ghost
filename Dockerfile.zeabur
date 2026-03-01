@@ -1,0 +1,85 @@
+# Dockerfile.zeabur
+# Build Ghost from monorepo source with built-in Admin panel
+# Target: Zeabur / any container platform using prebuilt image from GHCR
+
+ARG NODE_VERSION=22.18.0
+
+# ---- Stage 1: Builder ----
+FROM node:$NODE_VERSION-bookworm AS builder
+
+WORKDIR /build
+
+# Copy everything (we need the full monorepo for building)
+COPY . .
+
+# Install all dependencies (including devDependencies for building)
+RUN yarn install --frozen-lockfile --network-timeout 600000
+
+# Build everything: TSC + assets + Admin panel (Ember + React apps)
+RUN npx nx run ghost:build:tsc && \
+    npx nx run ghost:build:assets && \
+    npx nx run @tryghost/admin:build
+
+# Prepare a standalone production package using npm pack
+WORKDIR /build/ghost/core
+RUN npm pack && \
+    mkdir -p /output && \
+    tar -xzf ghost-*.tgz -C /output && \
+    cp /build/yarn.lock /output/package/
+
+# Install production dependencies in the standalone package
+WORKDIR /output/package
+RUN yarn install --production --ignore-scripts --network-timeout 600000 || true
+
+# Manually copy internal monorepo deps that yarn can't resolve from registry
+RUN for dep in $(node -e "const p=require('./package.json'); Object.keys(p.dependencies||{}).filter(d=>d.startsWith('@tryghost/')).forEach(d=>console.log(d))"); do \
+      dep_path="/build/node_modules/${dep}"; \
+      if [ -d "$dep_path" ]; then \
+        mkdir -p "node_modules/${dep}" && \
+        cp -r "$dep_path"/. "node_modules/${dep}/"; \
+      fi; \
+    done
+
+# Build sqlite3 native bindings
+RUN cd node_modules/sqlite3 && npm run install 2>/dev/null || true
+
+# Copy built admin into the package
+RUN cp -r /build/ghost/core/core/built/admin core/built/admin
+
+# ---- Stage 2: Production ----
+FROM node:$NODE_VERSION-bookworm-slim AS production
+
+ENV NODE_ENV=production
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libjemalloc2 && \
+    rm -rf /var/lib/apt/lists/* && \
+    groupmod -g 1001 node && \
+    usermod -u 1001 node && \
+    adduser --disabled-password --gecos "" --uid 1000 ghost
+
+WORKDIR /home/ghost
+
+# Copy the fully prepared package from builder
+COPY --from=builder /output/package/ ./
+
+# Override production config to use stdout logging and sqlite3 by default
+# Users can override database settings via env vars on the platform
+RUN echo '{\
+  "database": {"client": "sqlite3", "connection": {"filename": "content/data/ghost.db"}},\
+  "logging": {"level": "info", "transports": ["stdout"], "rotation": {"enabled": false}}\
+}' > core/shared/config/env/config.production.json
+
+# Ensure content directories exist and set permissions
+RUN mkdir -p content/data content/images content/media content/files content/logs content/themes && \
+    chown -R ghost:ghost /home/ghost
+
+USER ghost
+
+ENV LD_PRELOAD=libjemalloc.so.2
+ENV server__host=0.0.0.0
+ENV server__port=2368
+
+EXPOSE 2368
+
+CMD ["node", "index.js"]
