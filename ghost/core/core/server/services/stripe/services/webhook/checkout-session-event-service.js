@@ -1,10 +1,6 @@
 const _ = require('lodash');
 const errors = require('@tryghost/errors');
 const logging = require('@tryghost/logging');
-const {
-    canWelcomeEmailReplaceSignupPaidEmail
-} = require('../../../lib/member-signup-contexts');
-/** @typedef {import('../../../lib/member-signup-contexts').SignupContext} SignupContext */
 
 /**
  * Handles `checkout.session.completed` webhook events
@@ -178,7 +174,6 @@ module.exports = class CheckoutSessionEventService {
 
         const memberRepository = this.deps.memberRepository;
         const productRepository = this.deps.productRepository;
-        const checkoutType = _.get(session, 'metadata.checkoutType');
         const checkoutSubscriptionId = session.subscription;
 
         const ghostSubscriptions = [];
@@ -306,19 +301,6 @@ module.exports = class CheckoutSessionEventService {
             }
         }
 
-        if (checkoutType !== 'upgrade') {
-            const ghostSignupContext = /** @type {SignupContext | undefined} */ (session.metadata?.ghostSignupContext);
-            const shouldSkipSignupEmailWhenWelcomeEmailActive = canWelcomeEmailReplaceSignupPaidEmail(ghostSignupContext);
-
-            if (shouldSkipSignupEmailWhenWelcomeEmailActive) {
-                const isPaidWelcomeEmailActive = await this.deps.isPaidWelcomeEmailActive();
-                if (!isPaidWelcomeEmailActive) {
-                    this.deps.sendSignupEmail(customer.email);
-                }
-            } else {
-                // Direct checkout flows do not have a pre-checkout sign-in path.
-                this.deps.sendSignupEmail(customer.email);
-            }
-        }
+        // Subscription signup/welcome emails have been intentionally disabled
     }
 };
