@@ -13,7 +13,7 @@ function getProductIdFromSubscription(subscription) {
 
 /**
  * Checks whether a given Stripe product ID is allowed by the
- * GHOST_STRIPE_PRODUCT_ID environment variable whitelist.
+ * GHOST_STRIPE_PRODUCT_IDS environment variable whitelist.
  *
  * If the env var is NOT set, all products are allowed (backwards compatible).
  * If the env var IS set, only product IDs in the comma-separated list pass.
@@ -22,7 +22,7 @@ function getProductIdFromSubscription(subscription) {
  * @returns {boolean} true if allowed, false if blocked
  */
 function isAllowedStripeProduct(stripeProductId) {
-    const allowedRaw = process.env.GHOST_STRIPE_PRODUCT_ID;
+    const allowedRaw = process.env.GHOST_STRIPE_PRODUCT_IDS;
     if (!allowedRaw) {
         // Env var not set — no filtering, allow everything (backwards compatible)
         return true;
@@ -35,7 +35,7 @@ function isAllowedStripeProduct(stripeProductId) {
 
     const allowed = allowedIds.includes(stripeProductId);
     if (!allowed) {
-        logging.info(`[stripe-product-filter] Blocked Stripe product ${stripeProductId} — not in GHOST_STRIPE_PRODUCT_ID whitelist`);
+        logging.info(`[stripe-product-filter] Blocked Stripe product ${stripeProductId} — not in GHOST_STRIPE_PRODUCT_IDS whitelist`);
     }
     return allowed;
 }

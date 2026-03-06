@@ -1,4 +1,5 @@
 const {UpdateCollisionError, NotFoundError, MethodNotAllowedError, ValidationError, BadRequestError} = require('@tryghost/errors');
+const logging = require('@tryghost/logging');
 const tpl = require('@tryghost/tpl');
 
 const messages = {
@@ -568,10 +569,8 @@ class ProductRepository {
                     const existingProductId = existingPrice.stripe_product_id;
                     let stripeProduct = await this._StripeProduct.findOne({stripe_product_id: existingProductId}, options);
                     if (!stripeProduct) {
-                        stripeProduct = await this._StripeProduct.add({
-                            product_id: product.id,
-                            stripe_product_id: existingProductId
-                        }, options);
+                        logging.warn(`Skipping unknown Stripe product ${existingProductId} — not found in stripe_products table`);
+                        continue;
                     }
                     const stripePrice = await this._StripePrice.findOne({stripe_price_id: existingPrice.stripe_price_id}, options);
 
