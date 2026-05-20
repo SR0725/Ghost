@@ -100,6 +100,7 @@ class OEmbedService {
 
     /**
      * @param {string} url
+     * @returns {Promise<never>}
      */
     async unknownProvider(url) {
         throw new errors.ValidationError({
@@ -133,7 +134,7 @@ class OEmbedService {
 
     /**
      * Fetches the image buffer from a URL using this.externalRequest
-     * @param {String} imageUrl - URL of the image to fetch
+     * @param {string} imageUrl - URL of the image to fetch
      * @returns {Promise<Buffer>} - Promise resolving to the image buffer
      */
     async fetchImageBuffer(imageUrl) {
@@ -143,8 +144,8 @@ class OEmbedService {
 
     /**
      * Process and store image from a URL
-     * @param {String} imageUrl - URL of the image to process
-     * @param {String} imageType - What is the image used for. Example - icon, thumbnail
+     * @param {string} imageUrl - URL of the image to process
+     * @param {string} imageType - What is the image used for. Example - icon, thumbnail
      * @returns {Promise<String>} - URL where the image is stored
      */
     async processImageFromUrl(imageUrl, imageType) {
@@ -185,7 +186,9 @@ class OEmbedService {
                 headers: {
                     'user-agent': USER_AGENT
                 },
-                timeout: 2000,
+                timeout: {
+                    request: 2000
+                },
                 followRedirect: true,
                 ...options
             });
@@ -261,17 +264,33 @@ class OEmbedService {
      * @param {string} url
      * @param {string} html
      *
-     * @returns {Promise<Object>}
+     * @returns {Promise<{
+     *     version: '1.0',
+     *     type: 'bookmark',
+     *     url: string,
+     *     metadata: Omit<import('metascraper').Metadata, 'image'|'logo'> & {
+     *         thumbnail?: string,
+     *         icon?: string
+     *     }
+     * }>}
      */
     async fetchBookmarkData(url, html, type) {
+        const requestOptions = this.externalRequest.defaults?.options || {};
         const gotOpts = {
+            hooks: requestOptions.hooks,
+            retry: requestOptions.retry,
+            timeout: requestOptions.timeout,
+            ...requestOptions,
             headers: {
+                ...(requestOptions.headers || {}),
                 'User-Agent': USER_AGENT
             }
         };
 
         if (process.env.NODE_ENV?.startsWith('test')) {
-            gotOpts.retry = 0;
+            gotOpts.retry = {
+                limit: 0
+            };
         }
 
         const pickFn = (sizes, pickDefault) => {
@@ -422,6 +441,18 @@ class OEmbedService {
                     return;
                 }
                 if ((oembed.type === 'video' || oembed.type === 'rich') && (!oembed.html || !oembed.width)) {
+                    return;
+                }
+
+                // `rich` and `video` responses ship provider-supplied HTML that gets
+                // stored in the post's Lexical payload and rendered into the admin
+                // editor preview (via srcdoc) and into public themes (via innerHTML).
+                // Known providers (YouTube, Twitter, etc.) go through `knownProvider`
+                // with @extractus/oembed-extractor's allowlist — anything reaching
+                // here is an arbitrary site's self-declared oEmbed endpoint, which we
+                // must not trust. Drop the response and let the caller fall back to
+                // a bookmark card.
+                if (oembed.type === 'video' || oembed.type === 'rich') {
                     return;
                 }
 

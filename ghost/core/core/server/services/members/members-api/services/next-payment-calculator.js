@@ -1,3 +1,5 @@
+const getDiscountWindow = require('../utils/get-discount-window');
+
 /**
  * @typedef {import('../../../../services/offers/application/offer-mapper').OfferDTO} OfferDTO
  */
@@ -5,10 +7,10 @@
 /**
  * @typedef {object} SubscriptionDiscount
  * @prop {string} offer_id
- * @prop {string} start
- * @prop {string|null} end
+ * @prop {string} start - ISO string for active discounts
+ * @prop {string|null} end - ISO string for active once/repeating discounts, null for forever discounts
  * @prop {'once'|'repeating'|'forever'} duration
- * @prop {number|null} duration_in_months
+ * @prop {number|null} duration_in_months - Duration in months for repeating discounts, null for other types of discounts
  * @prop {'percent'|'fixed'} type
  * @prop {number} amount
  */
@@ -101,42 +103,7 @@ class NextPaymentCalculator {
      * @returns {ActiveDiscount|null}
      */
     _getActiveDiscount(subscription, offer) {
-        // Offers are based on a Stripe coupon, with a discount_start / discount_end
-        if (subscription.discount_start) {
-            return {
-                start: subscription.discount_start,
-                end: subscription.discount_end
-            };
-        }
-
-        // Backportability for old signup offers without discount_start / discount_end
-        if (offer.redemption_type !== 'signup') {
-            return null;
-        }
-
-        // Signup offers with once have already been applied to first payment
-        if (offer.duration === 'once') {
-            return null;
-        }
-
-        // Signup offer with forever don't expire
-        if (offer.duration === 'forever') {
-            return {start: subscription.start_date, end: null};
-        }
-
-        // Signup repeating offer expire after start_date + duration_in_months
-        if (offer.duration === 'repeating' && offer.duration_in_months > 0) {
-            const end = new Date(subscription.start_date);
-            end.setUTCMonth(end.getUTCMonth() + offer.duration_in_months);
-
-            if (new Date() >= end) {
-                return null;
-            }
-
-            return {start: subscription.start_date, end};
-        }
-
-        return null;
+        return getDiscountWindow(subscription, offer);
     }
 
     /**

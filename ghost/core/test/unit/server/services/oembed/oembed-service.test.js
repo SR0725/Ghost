@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const nock = require('nock');
-const got = require('got');
+const got = require('got').default;
 const sinon = require('sinon');
 
 const OembedService = require('../../../../../core/server/services/oembed/oembed-service');
@@ -104,35 +104,69 @@ describe('oembed-service', function () {
         });
     });
 
-    describe('fetchOembedDataFromUrl', function () {
-        it('allows rich embeds to skip height field', async function () {
-            nock('https://www.example.com')
-                .get('/')
-                .query(true)
-                .reply(200, `<html><head><link type="application/json+oembed" href="https://www.example.com/oembed"></head></html>`);
+    describe('fetchOembedData', function () {
+        const pageHtml = `<html><head><link type="application/json+oembed" href="https://www.example.com/oembed"></head></html>`;
 
+        it('drops rich-type responses from non-allowlisted providers (ONC-1648)', async function () {
+            // Self-declared oEmbed endpoints for arbitrary sites cannot be trusted
+            // to return safe HTML — known providers (Twitter, YouTube, …) go through
+            // `knownProvider` which uses an allowlist. Rich/video responses reaching
+            // this fallback path must not propagate their html into post content.
             nock('https://www.example.com')
                 .get('/oembed')
-                .query(true)
                 .reply(200, {
                     type: 'rich',
                     version: '1.0',
                     title: 'Test Title',
-                    author_name: 'Test Author',
-                    author_url: 'https://example.com/user/testauthor',
-                    html: '<iframe src="https://www.example.com/embed"></iframe>',
+                    html: '<img src=x onerror="alert(1)">',
                     width: 640,
-                    height: null
+                    height: 480
                 });
 
-            const response = await oembedService.fetchOembedDataFromUrl('https://www.example.com');
+            const response = await oembedService.fetchOembedData('https://www.example.com', pageHtml);
 
-            assert.equal(response.title, 'Test Title');
-            assert.equal(response.author_name, 'Test Author');
-            assert.equal(response.author_url, 'https://example.com/user/testauthor');
-            assert.equal(response.html, '<iframe src="https://www.example.com/embed"></iframe>');
+            // Returning undefined signals the caller to fall back to a bookmark
+            // card instead of storing the attacker-controlled html.
+            assert.equal(response, undefined);
         });
 
+        it('drops video-type responses from non-allowlisted providers (ONC-1648)', async function () {
+            nock('https://www.example.com')
+                .get('/oembed')
+                .reply(200, {
+                    type: 'video',
+                    version: '1.0',
+                    title: 'Test Title',
+                    html: '<iframe src="javascript:alert(1)"></iframe>',
+                    width: 640,
+                    height: 480
+                });
+
+            const response = await oembedService.fetchOembedData('https://www.example.com', pageHtml);
+
+            assert.equal(response, undefined);
+        });
+
+        it('still returns photo-type responses from non-allowlisted providers', async function () {
+            nock('https://www.example.com')
+                .get('/oembed')
+                .reply(200, {
+                    type: 'photo',
+                    version: '1.0',
+                    title: 'Test Title',
+                    url: 'https://www.example.com/photo.jpg',
+                    width: 640,
+                    height: 480
+                });
+
+            const response = await oembedService.fetchOembedData('https://www.example.com', pageHtml);
+
+            assert.equal(response.type, 'photo');
+            assert.equal(response.url, 'https://www.example.com/photo.jpg');
+        });
+    });
+
+    describe('fetchOembedDataFromUrl', function () {
         it('uses a known user-agent for bookmark requests', async function () {
             nock('https://www.example.com')
                 .get('/')
@@ -262,6 +296,150 @@ describe('oembed-service', function () {
             sinon.assert.calledOnce(generateUnique);
             sinon.assert.calledOnce(saveRaw);
             assert.equal(saveRaw.firstCall.args[1], 'thumbnail/sample.png');
+        });
+
+        it('works when saveRaw returns a relative path (local storage)', async function () {
+            const saveRaw = sinon.stub().resolves('/content/images/icon/favicon.ico');
+            const generateUnique = sinon.stub().resolves('/tmp/content/images/icon/favicon.ico');
+            const getSanitizedFileName = sinon.stub().returns('favicon');
+
+            const service = new OembedService({
+                config: {
+                    getContentPath() {
+                        return '/tmp/content/images';
+                    }
+                },
+                storage: {
+                    getStorage() {
+                        return {
+                            getSanitizedFileName,
+                            generateUnique,
+                            saveRaw
+                        };
+                    }
+                },
+                externalRequest() {
+                    return {
+                        buffer: async () => Buffer.from('ico-bytes')
+                    };
+                }
+            });
+
+            const storedUrl = await service.processImageFromUrl('https://example.com/favicon.ico', 'icon');
+
+            assert.equal(storedUrl, '/content/images/icon/favicon.ico');
+            assert.equal(saveRaw.firstCall.args[1], 'icon/favicon.ico');
+        });
+
+        it('throws when storage lacks saveRaw', async function () {
+            const service = new OembedService({
+                config: {
+                    getContentPath() {
+                        return '/tmp/content/images';
+                    }
+                },
+                storage: {
+                    getStorage() {
+                        return {
+                            getSanitizedFileName: sinon.stub().returns('sample'),
+                            generateUnique: sinon.stub().resolves('/tmp/sample.png')
+                        };
+                    }
+                },
+                externalRequest() {
+                    return {
+                        buffer: async () => Buffer.from('img-bytes')
+                    };
+                }
+            });
+
+            await assert.rejects(
+                () => service.processImageFromUrl('https://example.com/sample.png', 'thumbnail'),
+                {name: 'TypeError'}
+            );
+        });
+
+        it('throws when external request fails', async function () {
+            const service = new OembedService({
+                config: {
+                    getContentPath() {
+                        return '/tmp/content/images';
+                    }
+                },
+                storage: {
+                    getStorage() {
+                        return {
+                            getSanitizedFileName: sinon.stub().returns('sample'),
+                            generateUnique: sinon.stub().resolves('/tmp/sample.png'),
+                            saveRaw: sinon.stub().resolves('/stored')
+                        };
+                    }
+                },
+                externalRequest() {
+                    throw new Error('Network error');
+                }
+            });
+
+            await assert.rejects(
+                () => service.processImageFromUrl('https://example.com/broken.png', 'thumbnail'),
+                {message: 'Network error'}
+            );
+        });
+    });
+
+    describe('metascraper inherits externalRequest hooks', function () {
+        it('should apply externalRequest beforeRequest hooks to metascraper favicon fetches', async function () {
+            // metascraper-logo-favicon probes {origin}/favicon.ico via reachable-url.
+            // gotOpts must carry externalRequest's hooks so those probes are validated.
+            nock('http://169.254.169.254')
+                .get('/favicon.ico')
+                .reply(200, 'secret', {'content-type': 'image/png'});
+
+            const beforeRequestHook = sinon.stub().callsFake(async function blockPrivateIPs(options) {
+                if (options.url.hostname === '169.254.169.254') {
+                    throw new Error('URL resolves to a non-permitted private IP block');
+                }
+            });
+
+            const externalRequest = got.extend({
+                retry: {limit: 0, calculateDelay: () => 0},
+                timeout: {
+                    request: 5000
+                },
+                hooks: {
+                    init: [],
+                    beforeRequest: [beforeRequestHook],
+                    beforeRedirect: []
+                }
+            });
+
+            externalRequest.head = sinon.stub().rejects(new Error('blocked'));
+
+            const service = new OembedService({
+                config: {
+                    get: sinon.stub().returns('testing'),
+                    getContentPath: sinon.stub().returns('/tmp/content/images')
+                },
+                externalRequest,
+                storage: {
+                    getStorage: sinon.stub().returns({
+                        getSanitizedFileName: sinon.stub().returns('favicon'),
+                        generateUnique: sinon.stub().resolves('/tmp/content/images/icon/favicon.png'),
+                        saveRaw: sinon.stub().resolves('/content/images/icon/favicon.png')
+                    })
+                }
+            });
+
+            const html = `<html><head><title>Test Page</title></head><body></body></html>`;
+
+            await service.fetchBookmarkData('http://169.254.169.254/page', html, 'mention');
+
+            // The hook must have been called by metascraper's favicon probe,
+            // proving gotOpts inherited the externalRequest hooks
+            const faviconCall = beforeRequestHook.getCalls().find(
+                call => call.args[0].url.pathname === '/favicon.ico'
+            );
+            assert.ok(faviconCall, 'beforeRequest hook should have been called for the favicon fetch');
         });
     });
 });

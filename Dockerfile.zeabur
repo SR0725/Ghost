@@ -12,24 +12,26 @@ WORKDIR /build
 # Copy everything (we need the full monorepo for building)
 COPY . .
 
+RUN corepack enable
+
 # Install all dependencies (including devDependencies for building)
-RUN yarn install --frozen-lockfile --network-timeout 600000
+RUN pnpm install --frozen-lockfile
 
 # Build everything: TSC + assets + Admin panel (Ember + React apps)
-RUN npx nx run ghost:build:tsc && \
-    npx nx run ghost:build:assets && \
-    npx nx run @tryghost/admin:build
+RUN pnpm nx run ghost:build:tsc && \
+    pnpm nx run ghost:build:assets && \
+    pnpm nx run @tryghost/admin:build
 
 # Prepare a standalone production package using npm pack
 WORKDIR /build/ghost/core
 RUN npm pack && \
     mkdir -p /output && \
     tar -xzf ghost-*.tgz -C /output && \
-    cp /build/yarn.lock /output/package/
+    cp /build/pnpm-lock.yaml /output/package/
 
 # Install production dependencies in the standalone package
 WORKDIR /output/package
-RUN yarn install --production --ignore-scripts --network-timeout 600000 || true
+RUN pnpm install --prod --ignore-scripts --no-frozen-lockfile || true
 
 # Manually copy internal monorepo deps that yarn can't resolve from registry
 RUN for dep in $(node -e "const p=require('./package.json'); Object.keys(p.dependencies||{}).filter(d=>d.startsWith('@tryghost/')).forEach(d=>console.log(d))"); do \

@@ -6,7 +6,6 @@ const membersService = require('../../services/members');
 const stripeService = require('../../services/stripe');
 const middleware = membersService.middleware;
 const shared = require('../shared');
-const labs = require('../../../shared/labs');
 const errorHandler = require('@tryghost/mw-error-handler');
 const config = require('../../../shared/config');
 const settingsCache = require('../../../shared/settings-cache');
@@ -77,6 +76,7 @@ module.exports = function setupMembersApp() {
     membersApp.get('/api/session', middleware.getIdentityToken);
     membersApp.delete('/api/session', bodyParser.json({limit: '5mb'}), middleware.deleteSession);
 
+    membersApp.get('/api/entitlements', middleware.getEntitlementToken);
     membersApp.get('/api/integrity-token', middleware.createIntegrityToken);
 
     membersApp.post(
@@ -131,10 +131,22 @@ module.exports = function setupMembersApp() {
         http(api.feedbackMembers.add)
     );
 
+    // Gifts
+    membersApp.get(
+        '/api/gifts/:token/redeem',
+        middleware.loadMemberSession,
+        http(api.giftsMembers.getRedeemable)
+    );
+    membersApp.post(
+        '/api/gifts/:token/redeem',
+        bodyParser.json({limit: '50mb'}),
+        middleware.loadMemberSession,
+        http(api.giftsMembers.redeem)
+    );
+
     // Announcement
     membersApp.use(
         '/api/announcement',
-        labs.enabledMiddleware('announcementBar'),
         middleware.loadMemberSession,
         announcementRouter()
     );

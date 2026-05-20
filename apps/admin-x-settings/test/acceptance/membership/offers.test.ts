@@ -1,18 +1,19 @@
 import {type Page, expect, test} from '@playwright/test';
 import {globalDataRequests, mockApi, responseFixtures, settingsWithStripe} from '@tryghost/admin-x-framework/test/acceptance';
 
-test.describe('Offers Modal', () => {
+test.describe('Offers', () => {
     test('Offers Modal is available', async ({page}) => {
         await mockApi({page, requests: {
+            browseOffers: {method: 'GET', path: '/offers/', response: responseFixtures.offers},
             ...globalDataRequests,
             browseSettings: {...globalDataRequests.browseSettings, response: settingsWithStripe},
             browseTiers: {method: 'GET', path: '/tiers/', response: responseFixtures.tiers}
         }});
         await page.goto('/');
         const section = page.getByTestId('offers');
-        await section.getByRole('button', {name: 'Add offer'}).click();
-        const addModal = page.getByTestId('add-offer-modal');
-        await expect(addModal).toBeVisible();
+        await section.getByRole('button', {name: 'Manage offers'}).click();
+        const modal = page.getByTestId('offers-modal');
+        await expect(modal).toBeVisible();
     });
 
     test('Offers Add Modal is available', async ({page}) => {
@@ -62,9 +63,9 @@ test.describe('Offers Modal', () => {
         const modal = page.getByTestId('offers-modal');
         await modal.getByRole('button', {name: 'New offer'}).click();
         const addModal = page.getByTestId('add-offer-modal');
-        expect(addModal).toBeVisible();
+        await expect(addModal).toBeVisible();
         const sidebar = addModal.getByTestId('add-offer-sidebar');
-        expect(sidebar).toBeVisible();
+        await expect(sidebar).toBeVisible();
         await sidebar.getByPlaceholder(/^Black Friday$/).fill('Coffee Tuesdays');
         await sidebar.getByLabel('Amount off').fill('5');
 
@@ -102,12 +103,16 @@ test.describe('Offers Modal', () => {
         const modal = page.getByTestId('offers-modal');
         await modal.getByRole('button', {name: 'New offer'}).click();
         const addModal = page.getByTestId('add-offer-modal');
+        await addModal.getByText('First-payment', {exact: true}).first().click();
+        await page.getByTestId('select-option').filter({hasText: 'Multiple-months'}).click();
+        await addModal.getByTestId('duration-months-input').fill('0');
         await addModal.getByRole('button', {name: 'Publish'}).click();
         const sidebar = addModal.getByTestId('add-offer-sidebar');
         await expect(sidebar).toContainText(/Name is required/);
         await expect(sidebar).toContainText(/Code is required/);
-        await expect(sidebar).toContainText(/Enter an amount greater than 0./);
+        await expect(sidebar).toContainText(/Enter an amount between 1 and 100%./);
         await expect(sidebar).toContainText(/Display title is required/);
+        await expect(sidebar).toContainText(/Enter a whole number of months \(1 or more\)./);
     });
 
     test('Errors if the offer code is already taken', async ({page}) => {
@@ -131,9 +136,9 @@ test.describe('Offers Modal', () => {
         const modal = page.getByTestId('offers-modal');
         await modal.getByRole('button', {name: 'New offer'}).click();
         const addModal = page.getByTestId('add-offer-modal');
-        expect(addModal).toBeVisible();
+        await expect(addModal).toBeVisible();
         const sidebar = addModal.getByTestId('add-offer-sidebar');
-        expect(sidebar).toBeVisible();
+        await expect(sidebar).toBeVisible();
         await sidebar.getByPlaceholder(/^Black Friday$/).fill('Coffee Tuesdays');
         await sidebar.getByLabel('Amount off').fill('10');
         await addModal.getByRole('button', {name: 'Publish'}).click();
@@ -141,7 +146,7 @@ test.describe('Offers Modal', () => {
         await expect(page.getByTestId('toast-error')).toContainText(/Offer `code` must be unique. Please change and try again./);
     });
 
-    test('Shows validation hints', async ({page}) => {
+    test('Shows validation errors', async ({page}) => {
         await mockApi({page, requests: {
             browseOffers: {method: 'GET', path: '/offers/', response: responseFixtures.offers},
             ...globalDataRequests,
@@ -168,7 +173,7 @@ test.describe('Offers Modal', () => {
         const sidebar = addModal.getByTestId('add-offer-sidebar');
         await expect(sidebar).toContainText(/Name is required/);
         await expect(sidebar).toContainText(/Code is required/);
-        await expect(sidebar).toContainText(/Enter an amount greater than 0./);
+        await expect(sidebar).toContainText(/Enter an amount between 1 and 100%./);
         await expect(sidebar).toContainText(/Display title is required/);
     });
 
@@ -188,9 +193,9 @@ test.describe('Offers Modal', () => {
         await manageButton.click();
         const modal = page.getByTestId('offers-modal');
         await expect(modal).toBeVisible();
-        await expect(modal.getByText('Active')).toHaveAttribute('aria-selected', 'true');
         await expect(modal).toContainText('First offer');
         await expect(modal).toContainText('Second offer');
+        await expect(modal).not.toContainText('Third offer');
     });
 
     test('Can view archived offers', async ({page}) => {
@@ -206,8 +211,8 @@ test.describe('Offers Modal', () => {
         const section = page.getByTestId('offers');
         await section.getByRole('button', {name: 'Manage offers'}).click();
         const modal = page.getByTestId('offers-modal');
-        await modal.getByText('Archived').click();
-        await expect(modal.getByText('Archived')).toHaveAttribute('aria-selected', 'true');
+        await modal.getByRole('button', {name: 'Filter options'}).click();
+        await modal.getByLabel('Show archived').check();
         await expect(modal).toContainText('Third offer');
     });
 
@@ -232,7 +237,6 @@ test.describe('Offers Modal', () => {
         const section = page.getByTestId('offers');
         await section.getByRole('button', {name: 'Manage offers'}).click();
         const modal = page.getByTestId('offers-modal');
-        await expect(modal.getByText('Active')).toHaveAttribute('aria-selected', 'true');
         await expect(modal).toContainText('First offer');
         await modal.getByText('First offer').click();
 
@@ -306,7 +310,6 @@ test.describe('Offers Modal', () => {
             redemption_type: 'retention',
             tier: null
         };
-
         const createRetentionOffer = (overrides: Partial<RetentionOffer> = {}) => {
             return {
                 ...defaultRetentionOffer,
@@ -330,19 +333,6 @@ test.describe('Offers Modal', () => {
                     }
                 },
                 ...globalDataRequests,
-                browseConfig: {
-                    method: 'GET',
-                    path: '/config/',
-                    response: {
-                        config: {
-                            ...responseFixtures.config.config,
-                            labs: {
-                                ...responseFixtures.config.config?.labs,
-                                retentionOffers: true
-                            }
-                        }
-                    }
-                },
                 browseSettings: {...globalDataRequests.browseSettings, response: settingsWithStripe},
                 browseTiers: {method: 'GET', path: '/tiers/', response: responseFixtures.tiers},
                 ...extraRequests
@@ -537,6 +527,25 @@ test.describe('Offers Modal', () => {
             await saveButton.click();
             await expect(retentionModal.getByText('Enter an amount between 1 and 100%.')).toBeVisible();
             await expect(saveButton).toBeEnabled();
+
+            await retentionModal.getByText('Forever', {exact: true}).first().click();
+            await page.getByTestId('select-option').filter({hasText: 'Multiple-months'}).click();
+
+            await retentionModal.getByTestId('duration-months-input').fill('1.5');
+            await saveButton.click();
+            await expect(retentionModal.getByText('Enter a whole number of months between 1 and 99.')).toBeVisible();
+
+            await retentionModal.getByTestId('duration-months-input').fill('1000');
+            await expect(retentionModal.getByText('Enter a whole number of months between 1 and 99.')).toBeVisible();
+
+            await retentionModal.getByRole('button', {name: /Free month\(s\)/}).click();
+            await retentionModal.getByLabel('Free months').fill('0');
+            await saveButton.click();
+            await expect(retentionModal.getByText('Enter a whole number of months between 1 and 99.')).toBeVisible();
+
+            await retentionModal.getByLabel('Free months').fill('1000');
+            await expect(retentionModal.getByText('Enter a whole number of months between 1 and 99.')).toBeVisible();
+            await expect(saveButton).toBeEnabled();
         });
 
         test('Shows save error toast when retention save fails', async ({page}) => {
@@ -662,7 +671,7 @@ test.describe('Offers Modal', () => {
                     cadence: 'month',
                     amount: 35,
                     duration: 'forever',
-                    duration_in_months: 0,
+                    duration_in_months: null,
                     currency: null,
                     status: 'active',
                     redemption_type: 'retention',
@@ -673,8 +682,8 @@ test.describe('Offers Modal', () => {
             });
 
             const createdOffer = (lastApiRequests.addOffer?.body as {offers: Array<{name: string; code: string}>})?.offers?.[0];
-            expect(createdOffer?.name).toMatch(/^Retention 35% off forever \([a-f0-9]{4}\)$/);
-            expect(createdOffer?.code).toMatch(/^[a-f0-9]{4}$/);
+            expect(createdOffer?.name).toMatch(/^Retention 35% off forever \([a-f0-9]{8}\)$/);
+            expect(createdOffer?.code).toMatch(/^[a-f0-9]{8}$/);
         });
 
         test('Edits existing retention offer when only display fields change', async ({page}) => {
@@ -719,7 +728,9 @@ test.describe('Offers Modal', () => {
             const {lastApiRequests} = await mockApi({page, requests: getRetentionRequests({
                 retentionOffers: [createRetentionOffer({
                     id: 'retention-month-active',
-                    display_title: 'Before you go'
+                    display_title: 'Before you go',
+                    duration: 'repeating',
+                    duration_in_months: 3
                 })],
                 extraRequests: {
                     addOffer: {method: 'POST', path: '/offers/', response: {
@@ -740,6 +751,7 @@ test.describe('Offers Modal', () => {
 
             const {retentionModal} = await openRetentionModal(page, 'Monthly retention');
             await retentionModal.getByLabel('Amount off').fill('35');
+            await retentionModal.getByTestId('duration-months-input').fill('0');
             await retentionModal.getByRole('switch', {name: 'Enable monthly retention'}).click();
             await retentionModal.getByRole('button', {name: 'Save'}).click();
 
@@ -757,8 +769,8 @@ test.describe('Offers Modal', () => {
                 offers: [{
                     cadence: 'month',
                     amount: 35,
-                    duration: 'forever',
-                    duration_in_months: 0,
+                    duration: 'repeating',
+                    duration_in_months: 1,
                     status: 'archived',
                     redemption_type: 'retention',
                     tier: null,

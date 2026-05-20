@@ -15,6 +15,7 @@ const {
  * It is triggered for the following scenarios:
  * - Subscription
  * - Donation
+ * - Gift purchase
  * - Setup intent
  *
  * This service delegates the event to the appropriate handler based on the session mode and metadata.
@@ -27,6 +28,7 @@ module.exports = class CheckoutSessionEventService {
      * @param {import('../../stripe-api')} deps.api
      * @param {object} deps.memberRepository
      * @param {object} deps.donationRepository
+     * @param {object} deps.giftService
      * @param {object} deps.staffServiceEmails
      * @param {function} deps.sendSignupEmail
      * @param {function} deps.isPaidWelcomeEmailActive
@@ -52,7 +54,29 @@ module.exports = class CheckoutSessionEventService {
 
         if (session.mode === 'payment' && session.metadata?.ghost_donation) {
             await this.handleDonationEvent(session);
+        } else if (session.mode === 'payment' && session.metadata?.ghost_gift) {
+            await this.handleGiftEvent(session);
         }
+    }
+
+    /**
+     * Handles a `checkout.session.completed` event for a gift subscription purchase
+     *
+     * @param {import('stripe').Stripe.Checkout.Session} session
+     */
+    async handleGiftEvent(session) {
+        await this.deps.giftService.recordPurchase({
+            token: session.metadata?.gift_token,
+            buyerEmail: session.customer_details?.email,
+            stripeCustomerId: session.customer ?? null,
+            tierId: session.metadata?.tier_id,
+            cadence: session.metadata?.cadence,
+            duration: session.metadata?.duration,
+            currency: session.currency,
+            amount: session.amount_total,
+            stripeCheckoutSessionId: session.id,
+            stripePaymentIntentId: session.payment_intent
+        });
     }
 
     /**
