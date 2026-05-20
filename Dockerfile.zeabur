@@ -22,25 +22,17 @@ RUN pnpm nx run ghost:build:tsc && \
     pnpm nx run ghost:build:assets && \
     pnpm nx run @tryghost/admin:build
 
-# Prepare a standalone production package using npm pack
+# Prepare a standalone production package using Ghost's pnpm deploy/archive flow.
+# Ghost 6.39+ uses pnpm catalogs and private workspace packages, so npm pack
+# cannot produce an installable production package on its own.
 WORKDIR /build/ghost/core
-RUN npm pack && \
+RUN pnpm run archive && \
     mkdir -p /output && \
-    tar -xzf ghost-*.tgz -C /output && \
-    cp /build/pnpm-lock.yaml /output/package/
+    tar -xzf ghost-*.tgz -C /output
 
 # Install production dependencies in the standalone package
 WORKDIR /output/package
-RUN pnpm install --prod --ignore-scripts --no-frozen-lockfile || true
-
-# Manually copy internal monorepo deps that yarn can't resolve from registry
-RUN for dep in $(node -e "const p=require('./package.json'); Object.keys(p.dependencies||{}).filter(d=>d.startsWith('@tryghost/')).forEach(d=>console.log(d))"); do \
-      dep_path="/build/node_modules/${dep}"; \
-      if [ -d "$dep_path" ]; then \
-        mkdir -p "node_modules/${dep}" && \
-        cp -r "$dep_path"/. "node_modules/${dep}/"; \
-      fi; \
-    done
+RUN pnpm install --prod --no-frozen-lockfile
 
 # Build sqlite3 native bindings
 RUN cd node_modules/sqlite3 && npm run install 2>/dev/null || true
@@ -84,4 +76,4 @@ ENV server__port=2368
 
 EXPOSE 2368
 
-CMD ["node", "index.js"]
+CMD ["sh", "-c", "mkdir -p content/data content/images content/media content/files content/logs content/themes && node index.js"]

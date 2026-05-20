@@ -1,6 +1,10 @@
 node_modules
 .git
 .github
+!.github
+!.github/scripts
+!.github/scripts/enforce-package-manager.js
+!.github/hooks
 .nx
 .nxcache
 .vscode
