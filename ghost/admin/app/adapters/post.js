@@ -7,6 +7,7 @@ export const ALL_POST_INCLUDES = [
     'email',
     'tiers',
     'newsletter',
+    'course_video',
     'count.clicks',
     'post_revisions',
     'post_revisions.author'

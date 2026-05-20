@@ -11,9 +11,11 @@
 // Dev flag feature: In case of restricted content access for member-only posts, shows CTA box
 
 const {templates, hbs, SafeString} = require('../services/handlebars');
+const {settingsCache} = require('../services/proxy');
 const downsize = require('downsize');
 const _ = require('lodash');
 const createFrame = hbs.handlebars.createFrame;
+const {escapeExpression} = hbs.handlebars;
 
 function restrictedCta(options) {
     options = options || {};
@@ -57,5 +59,15 @@ module.exports = function content(options = {}) {
         );
     }
 
-    return new SafeString(this.html);
+    let courseVideoMount = '';
+    if (settingsCache.get('course_video_enabled') && this.course_video && this.course_video.enabled && this.uuid) {
+        const title = this.course_video.title || '';
+        courseVideoMount = [
+            `<div class="gh-course-video" data-post-uuid="${escapeExpression(this.uuid)}" data-title="${escapeExpression(title)}">`,
+            '<div class="gh-course-video__placeholder"></div>',
+            '</div>'
+        ].join('');
+    }
+
+    return new SafeString(courseVideoMount + this.html);
 };

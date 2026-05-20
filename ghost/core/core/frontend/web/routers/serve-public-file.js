@@ -134,6 +134,9 @@ function servePublicFiles(siteApp) {
     // Comment counts
     siteApp.get('/public/comment-counts.min.js', createPublicFileMiddleware('static', 'public/comment-counts.min.js', 'application/javascript', config.get('caching:publicAssets:maxAge')));
 
+    // Course video player
+    siteApp.get('/public/course-video.min.js', createPublicFileMiddleware('static', 'public/course-video.min.js', 'application/javascript', config.get('caching:publicAssets:maxAge')));
+
     // Member attribution
     siteApp.get('/public/member-attribution.min.js', createPublicFileMiddleware('static', 'public/member-attribution.min.js', 'application/javascript', config.get('caching:publicAssets:maxAge')));
 

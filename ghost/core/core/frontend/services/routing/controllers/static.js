@@ -12,7 +12,7 @@ function processQuery(query, locals) {
     //       We override the `include` property for now, because the full data set is required anyway.
     if (_.get(query, 'resource') === 'posts' || _.get(query, 'resource') === 'pages') {
         _.extend(query.options, {
-            include: 'authors,tags,tiers'
+            include: 'authors,tags,tiers,course_video'
         });
     }
 

@@ -173,6 +173,16 @@ export default class GhPostSettingsMenu extends Component {
         return !this.themeManagement.activeTheme.hasPageBuilderFeature('show_title_and_feature_image');
     }
 
+    get courseVideo() {
+        return this.post.courseVideo || {
+            enabled: false,
+            provider: 'youtube',
+            provider_video_id: '',
+            access: 'public',
+            title: ''
+        };
+    }
+
     willDestroyElement() {
         super.willDestroyElement(...arguments);
 
@@ -235,6 +245,45 @@ export default class GhPostSettingsMenu extends Component {
             this.showError(error);
             this.post.rollbackAttributes();
         });
+    }
+
+    @action
+    updateCourseVideoField(field, value) {
+        const courseVideo = {
+            enabled: false,
+            provider: 'youtube',
+            provider_video_id: '',
+            access: 'public',
+            title: '',
+            ...(this.post.courseVideo || {})
+        };
+
+        courseVideo[field] = value;
+        this.post.set('courseVideo', courseVideo);
+
+        if (this.post.isNew) {
+            return;
+        }
+
+        this.savePostTask.perform().catch((error) => {
+            this.showError(error);
+            this.post.rollbackAttributes();
+        });
+    }
+
+    @action
+    toggleCourseVideo(event) {
+        this.updateCourseVideoField('enabled', event.target.checked);
+    }
+
+    @action
+    updateCourseVideoId(event) {
+        this.updateCourseVideoField('provider_video_id', event.target.value);
+    }
+
+    @action
+    updateCourseVideoTitle(event) {
+        this.updateCourseVideoField('title', event.target.value);
     }
 
     @action

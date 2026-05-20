@@ -5,6 +5,10 @@ const logging = require('@tryghost/logging');
 
 // The string returned when a setting is set as write-only
 const obfuscatedSetting = '••••••••';
+const courseVideoSecretSettings = [
+    'course_video_cloudflare_api_token',
+    'course_video_cloudflare_signing_key_jwk'
+];
 
 /**
  * @description // The function used to decide whether a setting is write-only
@@ -13,7 +17,7 @@ const obfuscatedSetting = '••••••••';
  * @returns {Boolean}
  */
 function isSecretSetting(setting) {
-    return /secret/.test(setting.key);
+    return /secret/.test(setting.key) || courseVideoSecretSettings.includes(setting.key);
 }
 
 /**

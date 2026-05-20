@@ -88,7 +88,7 @@ function defaultRelations(frame) {
         return false;
     }
 
-    frame.options.withRelated = ['tags', 'authors', 'authors.roles', 'email', 'tiers', 'newsletter', 'count.clicks'];
+    frame.options.withRelated = ['tags', 'authors', 'authors.roles', 'email', 'tiers', 'newsletter', 'course_video', 'count.clicks'];
 }
 
 function setDefaultOrder(frame) {

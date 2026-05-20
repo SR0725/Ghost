@@ -85,7 +85,13 @@ const EDITABLE_SETTINGS = [
     'transistor_portal_heading',
     'transistor_portal_description',
     'transistor_portal_button_text',
-    'transistor_portal_url_template'
+    'transistor_portal_url_template',
+    'course_video_enabled',
+    'course_video_cloudflare_account_id',
+    'course_video_cloudflare_customer_code',
+    'course_video_cloudflare_api_token',
+    'course_video_cloudflare_signing_key_id',
+    'course_video_cloudflare_signing_key_jwk'
 ];
 
 module.exports = {

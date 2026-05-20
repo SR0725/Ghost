@@ -38,7 +38,7 @@ function entryLookup(postUrl, routerOptions, locals) {
     }
 
     let options = {
-        include: 'authors,tags,tiers'
+        include: 'authors,tags,tiers,course_video'
     };
 
     options.context = {member: locals.member};

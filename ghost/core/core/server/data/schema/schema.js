@@ -228,12 +228,13 @@ module.exports = {
             maxlength: 50,
             nullable: false,
             defaultTo: 'core',
-            validations: {
-                isIn: [[
-                    'core',
-                    'email',
-                    'labs',
-                    'members',
+                validations: {
+                    isIn: [[
+                        'core',
+                        'course_video',
+                        'email',
+                        'labs',
+                        'members',
                     'portal',
                     'private',
                     'site',
@@ -291,6 +292,18 @@ module.exports = {
         codeinjection_foot: {type: 'text', maxlength: 65535, nullable: true},
         canonical_url: {type: 'string', maxlength: 2000, nullable: true},
         accent_color: {type: 'string', maxlength: 50, nullable: true},
+        created_at: {type: 'dateTime', nullable: false},
+        updated_at: {type: 'dateTime', nullable: true}
+    },
+    post_course_videos: {
+        id: {type: 'string', maxlength: 24, nullable: false, primary: true},
+        post_id: {type: 'string', maxlength: 24, nullable: false, references: 'posts.id', unique: true},
+        provider: {type: 'string', maxlength: 50, nullable: false, defaultTo: 'youtube', validations: {isIn: [['cloudflare_stream', 'youtube']]}},
+        provider_video_id: {type: 'string', maxlength: 2000, nullable: true},
+        access: {type: 'string', maxlength: 50, nullable: false, defaultTo: 'public', validations: {isIn: [['public', 'members', 'paid']]}},
+        enabled: {type: 'boolean', nullable: false, defaultTo: false},
+        title: {type: 'string', maxlength: 2000, nullable: true},
+        metadata: {type: 'text', maxlength: 65535, nullable: true},
         created_at: {type: 'dateTime', nullable: false},
         updated_at: {type: 'dateTime', nullable: true}
     },

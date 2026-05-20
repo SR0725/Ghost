@@ -50,7 +50,13 @@ const keyGroupMapping = {
     portal_plans: 'portal',
     require_email_mfa: 'security',
     explore_ping: 'explore',
-    explore_ping_growth: 'explore'
+    explore_ping_growth: 'explore',
+    course_video_enabled: 'course_video',
+    course_video_cloudflare_account_id: 'course_video',
+    course_video_cloudflare_customer_code: 'course_video',
+    course_video_cloudflare_api_token: 'course_video',
+    course_video_cloudflare_signing_key_id: 'course_video',
+    course_video_cloudflare_signing_key_jwk: 'course_video'
 };
 
 const mapKeyToGroup = (key) => {

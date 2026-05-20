@@ -114,6 +114,19 @@ module.exports = async (model, frame, options = {}) => {
     });
     delete jsonModel.posts_meta;
 
+    if (utils.isContentAPI(frame) && jsonModel.course_video) {
+        if (!jsonModel.course_video.enabled || !jsonModel.course_video.provider_video_id) {
+            jsonModel.course_video = null;
+        } else {
+            jsonModel.course_video = {
+                enabled: jsonModel.course_video.enabled,
+                provider: jsonModel.course_video.provider,
+                access: jsonModel.course_video.access,
+                title: jsonModel.course_video.title
+            };
+        }
+    }
+
     clean.post(jsonModel, frame);
 
     if (frame.options && frame.options.withRelated) {

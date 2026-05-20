@@ -516,6 +516,35 @@
             "flags": "PUBLIC"
         }
     },
+    "course_video": {
+        "course_video_enabled": {
+            "defaultValue": "true",
+            "validations": {
+                "isIn": [["true", "false"]]
+            },
+            "type": "boolean"
+        },
+        "course_video_cloudflare_account_id": {
+            "defaultValue": "",
+            "type": "string"
+        },
+        "course_video_cloudflare_customer_code": {
+            "defaultValue": "",
+            "type": "string"
+        },
+        "course_video_cloudflare_api_token": {
+            "defaultValue": "",
+            "type": "string"
+        },
+        "course_video_cloudflare_signing_key_id": {
+            "defaultValue": "",
+            "type": "string"
+        },
+        "course_video_cloudflare_signing_key_jwk": {
+            "defaultValue": "",
+            "type": "string"
+        }
+    },
     "views": {
         "shared_views": {
             "defaultValue": "[]",

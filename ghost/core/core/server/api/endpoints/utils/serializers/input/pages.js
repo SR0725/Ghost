@@ -61,7 +61,7 @@ function defaultRelations(frame) {
         return false;
     }
 
-    frame.options.withRelated = ['tags', 'authors', 'authors.roles', 'tiers', 'count.signups', 'count.paid_conversions'];
+    frame.options.withRelated = ['tags', 'authors', 'authors.roles', 'tiers', 'course_video', 'count.signups', 'count.paid_conversions'];
 }
 
 function setDefaultOrder(frame) {

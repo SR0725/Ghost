@@ -115,6 +115,13 @@ export default Model.extend(Comparable, ValidationEngine, {
     uuid: attr('string'),
     emailSegment: attr('members-segment-string', {defaultValue: null}),
     emailOnly: attr('boolean', {defaultValue: false}),
+    courseVideo: attr({defaultValue: () => ({
+        enabled: false,
+        provider: 'youtube',
+        provider_video_id: '',
+        access: 'public',
+        title: ''
+    })}),
 
     featureImage: attr('string'),
     featureImageAlt: attr('string'),

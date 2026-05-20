@@ -1,4 +1,5 @@
 import CodeInjection from './code-injection';
+import CourseVideo from './course-video';
 import DangerZone from './danger-zone';
 import History from './history';
 import Integrations from './integrations';
@@ -9,6 +10,7 @@ import SearchableSection from '../../searchable-section';
 
 export const searchKeywords = {
     integrations: ['advanced', 'integrations', 'zapier', 'slack', 'unsplash', 'first promoter', 'firstpromoter', 'pintura', 'disqus', 'analytics', 'ulysses', 'typeform', 'buffer', 'plausible', 'github', 'webhooks'],
+    courseVideo: ['advanced', 'course video', 'video', 'cloudflare stream', 'youtube', 'lesson', 'online course'],
     migrationtools: ['import', 'export', 'migrate', 'substack', 'substack', 'migration', 'medium', 'wordpress', 'wp', 'squarespace'],
     codeInjection: ['advanced', 'code injection', 'head', 'footer'],
     labs: ['advanced', 'labs', 'alpha', 'private', 'beta', 'flag', 'routes', 'redirect', 'translation', 'editor', 'portal'],
@@ -20,6 +22,7 @@ const AdvancedSettings: React.FC = () => {
     return (
         <SearchableSection keywords={Object.values(searchKeywords).flat()} title='Advanced'>
             <Integrations keywords={searchKeywords.integrations} />
+            <CourseVideo keywords={searchKeywords.courseVideo} />
             <MigrationTools keywords={searchKeywords.migrationtools} />
             <CodeInjection keywords={searchKeywords.codeInjection} />
             <Labs keywords={searchKeywords.labs} />

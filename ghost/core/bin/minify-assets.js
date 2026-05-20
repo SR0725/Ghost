@@ -70,6 +70,13 @@ const filesToMinify = [
         }
     },
     {
+        src: 'core/frontend/src/course-video/course-video.js',
+        dest: 'core/frontend/public/course-video.min.js',
+        options: {
+            bundle: false
+        }
+    },
+    {
         src: 'core/frontend/src/admin-auth/message-handler.js',
         dest: 'core/frontend/public/admin-auth/admin-auth.min.js',
         options: {

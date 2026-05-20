@@ -93,6 +93,76 @@
                             {{/if}}
                         {{/if}}
 
+                        <GhFormGroup>
+                            <label>Course video</label>
+                            <div class="for-switch xs mb3">
+                                <label class="switch" for="course-video-enabled">
+                                    <span>Show course video</span>
+                                    <span class="gh-toggle-featured">
+                                        <input
+                                            id="course-video-enabled"
+                                            type="checkbox"
+                                            checked={{this.courseVideo.enabled}}
+                                            class="gh-input gh-input-x"
+                                            {{on "change" this.toggleCourseVideo}}
+                                            data-test-checkbox="course-video-enabled"
+                                        >
+                                        <span class="input-toggle-component"></span>
+                                    </span>
+                                </label>
+                            </div>
+
+                            {{#if this.courseVideo.enabled}}
+                                <label for="course-video-provider">Video provider</label>
+                                <Inputs::Select
+                                    id="course-video-provider"
+                                    class="gh-input gh-input-x mb2"
+                                    @value={{this.courseVideo.provider}}
+                                    @onChange={{fn this.updateCourseVideoField "provider"}}
+                                    as |select|
+                                >
+                                    <select.option @value="youtube" @label="YouTube" />
+                                    <select.option @value="cloudflare_stream" @label="Cloudflare Stream" />
+                                </Inputs::Select>
+
+                                <label for="course-video-id">Video ID or URL</label>
+                                <GhTextInput
+                                    @class="gh-input-x mb2"
+                                    @id="course-video-id"
+                                    @name="course-video-id"
+                                    @value={{readonly this.courseVideo.provider_video_id}}
+                                    @input={{this.updateCourseVideoId}}
+                                    @stopEnterKeyDownPropagation={{true}}
+                                    data-test-field="course-video-id" />
+                                {{#if (eq this.courseVideo.provider "cloudflare_stream")}}
+                                    <p class="response">Restricted Cloudflare Stream videos must have Require Signed URLs enabled.</p>
+                                {{/if}}
+
+                                <label for="course-video-title">Video title</label>
+                                <GhTextInput
+                                    @class="gh-input-x mb2"
+                                    @id="course-video-title"
+                                    @name="course-video-title"
+                                    @value={{readonly this.courseVideo.title}}
+                                    @input={{this.updateCourseVideoTitle}}
+                                    @stopEnterKeyDownPropagation={{true}}
+                                    data-test-field="course-video-title" />
+
+                                <label for="course-video-access">Video access</label>
+                                <Inputs::Select
+                                    id="course-video-access"
+                                    class="gh-input gh-input-x"
+                                    @value={{this.courseVideo.access}}
+                                    @onChange={{fn this.updateCourseVideoField "access"}}
+                                    as |select|
+                                >
+                                    <select.option @value="public" @label="Anyone" />
+                                    <select.option @value="members" @label="Members" />
+                                    <select.option @value="paid" @label="Paid members" />
+                                </Inputs::Select>
+                            {{/if}}
+                        </GhFormGroup>
+
                         {{#unless (feature 'editorExcerpt')}}
                         <GhFormGroup @errors={{this.post.errors}} @hasValidated={{this.post.hasValidated}} @property="customExcerpt">
                             <label for="custom-excerpt">Excerpt</label>

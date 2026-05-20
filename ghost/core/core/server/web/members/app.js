@@ -9,12 +9,14 @@ const shared = require('../shared');
 const labs = require('../../../shared/labs');
 const errorHandler = require('@tryghost/mw-error-handler');
 const config = require('../../../shared/config');
+const settingsCache = require('../../../shared/settings-cache');
 const {http} = require('@tryghost/api-framework');
 const api = require('../../api').endpoints;
 
 const commentRouter = require('../comments');
 const announcementRouter = require('../announcement');
 const corsMiddleware = require('./middleware/cors');
+const courseVideos = require('../../services/course-videos');
 
 /**
  * @returns {import('express').Application}
@@ -157,6 +159,41 @@ module.exports = function setupMembersApp() {
     // 2. For recommendations to know when we can offer 'one-click-subscribe' to know if members are enabled
     // Why not content API? Domain can be different from recommended domain + CORS issues
     membersApp.get('/api/site', http(api.site.read));
+
+    membersApp.get('/api/course-video/:post_uuid', middleware.loadMemberSession, async function getCourseVideo(req, res, next) {
+        try {
+            if (!settingsCache.get('course_video_enabled')) {
+                res.writeHead(404);
+                return res.end();
+            }
+
+            const courseVideo = await courseVideos.getCourseVideoForPostUuid(req.params.post_uuid);
+
+            if (!courseVideos.hasAccess(courseVideo, req.member)) {
+                res.writeHead(403, {'Content-Type': 'application/json'});
+                return res.end(JSON.stringify({
+                    errors: [{
+                        message: 'You do not have access to this course video.',
+                        required_access: courseVideos.getRequiredAccess(courseVideo)
+                    }]
+                }));
+            }
+
+            const iframeUrl = await courseVideos.getIframeUrl(courseVideo);
+
+            res.writeHead(200, {'Content-Type': 'application/json'});
+            res.end(JSON.stringify({
+                course_video: {
+                    provider: courseVideo.provider,
+                    title: courseVideo.title,
+                    access: courseVideo.access,
+                    iframe_url: iframeUrl
+                }
+            }));
+        } catch (err) {
+            next(err);
+        }
+    });
 
     // API error handling
     membersApp.use('/api', errorHandler.resourceNotFound);

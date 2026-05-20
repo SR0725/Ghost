@@ -99,7 +99,7 @@ Post = ghostBookshelf.Model.extend({
         };
     },
 
-    relationships: ['tags', 'authors', 'mobiledoc_revisions', 'post_revisions', 'posts_meta', 'tiers'],
+    relationships: ['tags', 'authors', 'mobiledoc_revisions', 'post_revisions', 'posts_meta', 'course_video', 'tiers'],
     relationshipConfig: {
         tags: {
             editable: true
@@ -115,6 +115,9 @@ Post = ghostBookshelf.Model.extend({
         },
         posts_meta: {
             editable: true
+        },
+        course_video: {
+            editable: true
         }
     },
 
@@ -123,12 +126,17 @@ Post = ghostBookshelf.Model.extend({
         tags: 'tags',
         tiers: 'products',
         authors: 'users',
-        posts_meta: 'posts_meta'
+        posts_meta: 'posts_meta',
+        course_video: 'post_course_videos'
     },
 
     relationsMeta: {
         posts_meta: {
             targetTableName: 'posts_meta',
+            foreignKey: 'post_id'
+        },
+        course_video: {
+            targetTableName: 'post_course_videos',
             foreignKey: 'post_id'
         },
         email: {
@@ -342,6 +350,11 @@ Post = ghostBookshelf.Model.extend({
             },
             posts_meta: {
                 tableName: 'posts_meta',
+                type: 'oneToOne',
+                joinFrom: 'post_id'
+            },
+            course_video: {
+                tableName: 'post_course_videos',
                 type: 'oneToOne',
                 joinFrom: 'post_id'
             },
@@ -663,6 +676,29 @@ Post = ghostBookshelf.Model.extend({
                 this.set('posts_meta', postsMetaData);
             } else if (_.isEmpty(postsMetaData) || hasNoData) {
                 this.set('posts_meta', null);
+            }
+        }
+
+        if (!_.isUndefined(this.get('course_video')) && !_.isNull(this.get('course_video'))) {
+            let courseVideoData = this.get('course_video');
+            let relatedModelId = model.related('course_video').get('id');
+            let providerVideoId = _.toString(courseVideoData.provider_video_id || '').trim();
+            let hasRequiredData = courseVideoData.provider && (courseVideoData.enabled || providerVideoId);
+
+            courseVideoData.provider_video_id = providerVideoId || null;
+
+            if (courseVideoData.enabled && !providerVideoId) {
+                throw new errors.ValidationError({
+                    message: 'Course video ID is required when course video is enabled.',
+                    property: 'course_video.provider_video_id'
+                });
+            }
+
+            if (relatedModelId && !_.isEmpty(courseVideoData)) {
+                courseVideoData.id = relatedModelId;
+                this.set('course_video', courseVideoData);
+            } else if (_.isEmpty(courseVideoData) || !hasRequiredData) {
+                this.set('course_video', null);
             }
         }
 
@@ -1005,6 +1041,10 @@ Post = ghostBookshelf.Model.extend({
         return this.hasOne('PostsMeta', 'post_id');
     },
 
+    course_video: function courseVideo() {
+        return this.hasOne('PostCourseVideo', 'post_id');
+    },
+
     email: function email() {
         return this.hasOne('Email', 'post_id');
     },
@@ -1237,7 +1277,7 @@ Post = ghostBookshelf.Model.extend({
             options.columns
             && _.intersection(_.without(ghostBookshelf.model('PostsMeta').prototype.permittedAttributes(), 'id', 'post_id'), options.columns).length)
         ) {
-            options.withRelated = _.union(['posts_meta'], options.withRelated || []);
+            options.withRelated = _.union(['posts_meta', 'course_video'], options.withRelated || []);
         }
 
         return options;
