@@ -498,7 +498,13 @@ function createTable(table, transaction = db.knex, tableSpec = schema[table]) {
             .forEach(column => addTableColumn(table, t, column, tableSpec[column]));
 
         if (tableSpec['@@INDEXES@@']) {
-            tableSpec['@@INDEXES@@'].forEach(index => t.index(index));
+            tableSpec['@@INDEXES@@'].forEach((index) => {
+                if (Array.isArray(index)) {
+                    t.index(index);
+                } else {
+                    t.index(index.columns, index.name);
+                }
+            });
         }
         if (tableSpec['@@UNIQUE_CONSTRAINTS@@']) {
             tableSpec['@@UNIQUE_CONSTRAINTS@@'].forEach(unique => t.unique(unique));

@@ -180,18 +180,32 @@ module.exports = function setupMembersApp() {
             }
 
             const courseVideo = await courseVideos.getCourseVideoForPostUuid(req.params.post_uuid);
+            const browserSession = courseVideos.ensureBrowserSessionCookie(req, res);
+            if (!browserSession) {
+                res.writeHead(409, {'Content-Type': 'application/json'});
+                return res.end(JSON.stringify({
+                    errors: [{
+                        message: 'Course video session initialized. Retry the request.',
+                        retry: true
+                    }]
+                }));
+            }
 
             if (!courseVideos.hasAccess(courseVideo, req.member)) {
+                const eventToken = courseVideos.getCourseVideoEventToken(courseVideo, req.get('x-ghost-course-video-session'), browserSession);
+
                 res.writeHead(403, {'Content-Type': 'application/json'});
                 return res.end(JSON.stringify({
                     errors: [{
                         message: 'You do not have access to this course video.',
-                        required_access: courseVideos.getRequiredAccess(courseVideo)
+                        required_access: courseVideos.getRequiredAccess(courseVideo),
+                        event_token: eventToken
                     }]
                 }));
             }
 
             const iframeUrl = await courseVideos.getIframeUrl(courseVideo);
+            const eventToken = courseVideos.getCourseVideoEventToken(courseVideo, req.get('x-ghost-course-video-session'), browserSession);
 
             res.writeHead(200, {'Content-Type': 'application/json'});
             res.end(JSON.stringify({
@@ -199,8 +213,27 @@ module.exports = function setupMembersApp() {
                     provider: courseVideo.provider,
                     title: courseVideo.title,
                     access: courseVideo.access,
-                    iframe_url: iframeUrl
+                    iframe_url: iframeUrl,
+                    event_token: eventToken
                 }
+            }));
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    membersApp.post('/api/course-video/:post_uuid/events', bodyParser.json({limit: '20kb'}), middleware.loadMemberSession, async function trackCourseVideoEvent(req, res, next) {
+        try {
+            if (!settingsCache.get('course_video_enabled')) {
+                res.writeHead(404);
+                return res.end();
+            }
+
+            const result = await courseVideos.recordEventForPostUuid(req.params.post_uuid, req.member, req.body, courseVideos.getBrowserSessionFromRequest(req));
+
+            res.writeHead(result.created ? 201 : 200, {'Content-Type': 'application/json'});
+            res.end(JSON.stringify({
+                course_video_event: result
             }));
         } catch (err) {
             next(err);

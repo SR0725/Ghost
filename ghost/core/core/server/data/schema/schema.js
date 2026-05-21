@@ -309,6 +309,27 @@ module.exports = {
         created_at: {type: 'dateTime', nullable: false},
         updated_at: {type: 'dateTime', nullable: true}
     },
+    course_video_events: {
+        id: {type: 'string', maxlength: 24, nullable: false, primary: true},
+        post_id: {type: 'string', maxlength: 24, nullable: false, references: 'posts.id'},
+        post_course_video_id: {type: 'string', maxlength: 24, nullable: false, references: 'post_course_videos.id'},
+        session_id: {type: 'string', maxlength: 64, nullable: false},
+        member_status: {type: 'string', maxlength: 50, nullable: false, defaultTo: 'anonymous'},
+        event_type: {type: 'string', maxlength: 50, nullable: false},
+        provider: {type: 'string', maxlength: 50, nullable: false},
+        access: {type: 'string', maxlength: 50, nullable: false},
+        playback_position_seconds: {type: 'integer', nullable: true, unsigned: true},
+        duration_seconds: {type: 'integer', nullable: true, unsigned: true},
+        watch_seconds: {type: 'integer', nullable: true, unsigned: true},
+        progress_percent: {type: 'integer', nullable: true, unsigned: true},
+        metadata: {type: 'text', maxlength: 65535, nullable: true},
+        created_at: {type: 'dateTime', nullable: false},
+        '@@INDEXES@@': [
+            {columns: ['post_course_video_id', 'event_type'], name: 'cve_video_event_idx'},
+            {columns: ['post_id', 'created_at'], name: 'cve_post_created_idx'},
+            {columns: ['session_id', 'post_course_video_id', 'event_type'], name: 'cve_session_video_event_idx'}
+        ]
+    },
     posts_tags: {
         id: {type: 'string', maxlength: 24, nullable: false, primary: true},
         post_id: {type: 'string', maxlength: 24, nullable: false, references: 'posts.id'},

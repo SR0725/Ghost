@@ -1,4 +1,5 @@
 const statsService = require('../../services/stats');
+const courseVideos = require('../../services/course-videos');
 
 /** @type {import('@tryghost/api-framework').Controller} */
 const controller = {
@@ -68,6 +69,23 @@ const controller = {
         },
         async query() {
             return await statsService.api.getSubscriptionCountHistory();
+        }
+    },
+    courseVideos: {
+        headers: {
+            cacheInvalidate: false
+        },
+        options: [
+            'post_id',
+            'post_uuid',
+            'limit'
+        ],
+        permissions: {
+            docName: 'posts',
+            method: 'browse'
+        },
+        async query(frame) {
+            return await courseVideos.getAnalytics(frame.options);
         }
     },
     referrersHistory: {
