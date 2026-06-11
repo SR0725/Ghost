@@ -30,7 +30,7 @@ describe('SubscriptionEventService', function () {
         sinon.assert.notCalled(memberRepository.linkSubscription);
     });
 
-    it('should ignore subscription event for non-Ghost product', async function () {
+    it('should ignore subscription event for product outside the env whitelist', async function () {
         const subscription = {
             id: 'sub_456',
             items: {
@@ -39,11 +39,18 @@ describe('SubscriptionEventService', function () {
             customer: 'cust_123'
         };
 
-        productRepository.get.resolves(null);
+        const originalWhitelist = process.env.GHOST_STRIPE_PRODUCT_IDS;
+        process.env.GHOST_STRIPE_PRODUCT_IDS = 'prod_ghost';
+        try {
+            await service.handleSubscriptionEvent(subscription);
+        } finally {
+            if (originalWhitelist === undefined) {
+                delete process.env.GHOST_STRIPE_PRODUCT_IDS;
+            } else {
+                process.env.GHOST_STRIPE_PRODUCT_IDS = originalWhitelist;
+            }
+        }
 
-        await service.handleSubscriptionEvent(subscription);
-
-        sinon.assert.calledWith(productRepository.get, {stripe_product_id: 'prod_non_ghost'});
         sinon.assert.notCalled(memberRepository.get);
         sinon.assert.notCalled(memberRepository.linkSubscription);
     });
@@ -57,14 +64,12 @@ describe('SubscriptionEventService', function () {
             customer: 'cust_123'
         };
 
-        productRepository.get.resolves({id: 'ghost_product_123'});
         memberRepository.get
             .onFirstCall().resolves({id: 'member_123'})
             .onSecondCall().resolves({get: sinon.stub().returns('free')});
 
         await service.handleSubscriptionEvent(subscription);
 
-        sinon.assert.calledWith(productRepository.get, {stripe_product_id: 'prod_ghost'});
         sinon.assert.calledWith(memberRepository.linkSubscription, {id: 'member_123', subscription});
     });
 

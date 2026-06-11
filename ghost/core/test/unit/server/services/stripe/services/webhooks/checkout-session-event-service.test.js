@@ -2,10 +2,11 @@ const assert = require('node:assert/strict');
 const errors = require('@tryghost/errors');
 const sinon = require('sinon');
 
+const metaCapiService = require('../../../../../../../core/server/services/meta-capi');
 const CheckoutSessionEventService = require('../../../../../../../core/server/services/stripe/services/webhook/checkout-session-event-service');
 
 describe('CheckoutSessionEventService', function () {
-    let api, memberRepository, productRepository, donationRepository, giftService, staffServiceEmails, sendSignupEmail, isPaidWelcomeEmailActive;
+    let api, memberRepository, productRepository, donationRepository, giftService, staffServiceEmails, sendSignupEmail, isPaidWelcomeEmailActive, startHereLabeler, metaCapiCapturePurchase, metaCapiCaptureSubscribe;
 
     beforeEach(function () {
         api = {
@@ -47,6 +48,15 @@ describe('CheckoutSessionEventService', function () {
 
         sendSignupEmail = sinon.stub();
         isPaidWelcomeEmailActive = sinon.stub().resolves(false);
+        startHereLabeler = {
+            ensureStartHereLabelForMember: sinon.stub().resolves()
+        };
+        metaCapiCapturePurchase = sinon.stub(metaCapiService, 'capturePurchase');
+        metaCapiCaptureSubscribe = sinon.stub(metaCapiService, 'captureSubscribe');
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     function createService(deps = {}) {
@@ -59,6 +69,7 @@ describe('CheckoutSessionEventService', function () {
             staffServiceEmails,
             sendSignupEmail,
             isPaidWelcomeEmailActive,
+            startHereLabeler,
             ...deps
         });
     }
@@ -823,6 +834,40 @@ describe('CheckoutSessionEventService', function () {
             assert.equal(memberData.newsletters, undefined);
         });
 
+        it('should add start-here label to a new member when checkout is attributed to start-here', async function () {
+            api.getCustomer.resolves(customer);
+            memberRepository.get.resolves(null);
+            session.metadata.attribution_url = 'https://example.com/start-here/?utm_source=launch';
+
+            await service.handleSubscriptionEvent(session);
+
+            sinon.assert.calledOnceWithExactly(startHereLabeler.ensureStartHereLabelForMember, 'created_member');
+        });
+
+        it('should capture purchase with Meta CAPI after subscription checkout succeeds', async function () {
+            api.getCustomer.resolves(customer);
+            memberRepository.get.resolves(member);
+            session.id = 'cs_123';
+            session.amount_total = 3000;
+            session.currency = 'twd';
+            session.metadata.meta_event_id = 'checkout_evt_123';
+            session.metadata.meta_fbp = 'fb.1.123.456';
+            session.metadata.meta_fbc = 'fb.1.123.fbclid';
+
+            await service.handleSubscriptionEvent(session);
+
+            sinon.assert.calledOnceWithExactly(metaCapiCapturePurchase, {
+                session,
+                customer,
+                member
+            });
+            sinon.assert.calledOnceWithExactly(metaCapiCaptureSubscribe, {
+                session,
+                customer,
+                member
+            });
+        });
+
         it('should update member if found', async function () {
             api.getCustomer.resolves(customer);
             memberRepository.get.resolves(member);
@@ -859,6 +904,26 @@ describe('CheckoutSessionEventService', function () {
             sinon.assert.calledOnce(memberRepository.update);
             const memberData = memberRepository.update.getCall(0).args[0];
             assert.equal(memberData.newsletters, undefined);
+        });
+
+        it('should add start-here label to an existing member when checkout is attributed to start-here', async function () {
+            api.getCustomer.resolves(customer);
+            memberRepository.get.resolves(member);
+            session.metadata.attribution_url = '/start-here';
+
+            await service.handleSubscriptionEvent(session);
+
+            sinon.assert.calledOnceWithExactly(startHereLabeler.ensureStartHereLabelForMember, 'member_123');
+        });
+
+        it('should not add start-here label when checkout is attributed to another page', async function () {
+            api.getCustomer.resolves(customer);
+            memberRepository.get.resolves(null);
+            session.metadata.attribution_url = '/';
+
+            await service.handleSubscriptionEvent(session);
+
+            sinon.assert.notCalled(startHereLabeler.ensureStartHereLabelForMember);
         });
 
         describe('signup email logic', function () {

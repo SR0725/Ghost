@@ -1,5 +1,6 @@
 const errors = require('@tryghost/errors');
 const {isAllowedStripeProduct} = require('./stripe-product-filter');
+const metaCapiService = require('../../../meta-capi');
 
 /**
  * Handles `invoice.payment_succeeded` webhook events
@@ -66,6 +67,12 @@ module.exports = class InvoiceEventService {
                     currency: invoice.currency,
                     amount: invoice.amount_paid
                 });
+
+                // 首購的 Purchase 已由 checkout.session.completed 發出（帶瀏覽器
+                // meta_event_id 與 client pixel 去重）；這裡只補續費 / 方案變更的收款。
+                if (invoice.billing_reason !== 'subscription_create') {
+                    metaCapiService.captureRenewal({invoice, member});
+                }
             }
         } else {
             // Could not find the member, which we need in order to insert an payment event.

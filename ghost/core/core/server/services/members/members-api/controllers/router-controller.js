@@ -10,6 +10,7 @@ const normalizeEmail = require('../utils/normalize-email');
 const hasActiveOffer = require('../utils/has-active-offer');
 const {getInboxLinks} = require('../../../../lib/get-inbox-links');
 const {SIGNUP_CONTEXTS} = require('../../../lib/member-signup-contexts');
+const posthogService = require('../../../posthog');
 /** @typedef {import('../../../lib/member-signup-contexts').SignupContext} SignupContext */
 
 const messages = {
@@ -63,6 +64,23 @@ function extractGiftToken(input) {
     }
 
     return input.trim();
+}
+
+function getClientIp(req) {
+    const forwardedFor = req.headers?.['x-forwarded-for'];
+    if (typeof forwardedFor === 'string' && forwardedFor.length) {
+        return forwardedFor.split(',')[0].trim();
+    }
+
+    return req.ip || req.socket?.remoteAddress || null;
+}
+
+function truncateMetadataValue(value, maxLength = 500) {
+    if (!value || typeof value !== 'string') {
+        return null;
+    }
+
+    return value.slice(0, maxLength);
 }
 
 /**
@@ -731,6 +749,23 @@ module.exports = class RouterController {
         // Store attribution data in the metadata
         await this._setAttributionMetadata(metadata);
 
+        // Carry the PostHog browser distinct_id through Stripe so the server-side
+        // checkout/payment events attribute to the same person as the client-side
+        // funnel events ($pageview, cta_clicked).
+        const phDistinctId = posthogService.extractDistinctId(req.headers?.cookie);
+        if (phDistinctId) {
+            metadata.ph_distinct_id = phDistinctId;
+        }
+
+        const clientIp = truncateMetadataValue(getClientIp(req));
+        const clientUserAgent = truncateMetadataValue(req.get?.('user-agent') || req.headers?.['user-agent']);
+        if (clientIp) {
+            metadata.meta_client_ip = clientIp;
+        }
+        if (clientUserAgent) {
+            metadata.meta_client_user_agent = clientUserAgent;
+        }
+
         if (metadata.newsletters) {
             metadata.newsletters = JSON.stringify(await this._validateNewsletters(JSON.parse(metadata.newsletters)));
         }
@@ -804,6 +839,19 @@ module.exports = class RouterController {
             if (isAuthenticated && tier && tier.welcomePageURL) {
                 response.welcomePageUrl = tier.welcomePageURL;
             }
+
+            posthogService.capture({
+                distinctId: phDistinctId,
+                event: 'checkout_initiated',
+                properties: {
+                    tier_id: tier?.id ?? null,
+                    tier_name: tier?.name ?? null,
+                    cadence: cadence ?? null,
+                    has_offer: Boolean(offer),
+                    attribution_url: metadata.attribution_url ?? null,
+                    utm_source: metadata.utm_source ?? null
+                }
+            });
         } else if (type === 'donation') {
             options.personalNote = parsePersonalNote(req.body.personalNote);
             response = await this._createDonationCheckoutSession(options);

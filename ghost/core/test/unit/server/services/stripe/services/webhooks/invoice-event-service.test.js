@@ -5,11 +5,13 @@ const assert = require('node:assert/strict');
 const errors = require('@tryghost/errors');
 
 const InvoiceEventService = require('../../../../../../../core/server/services/stripe/services/webhook/invoice-event-service');
+const metaCapiService = require('../../../../../../../core/server/services/meta-capi');
 
 describe('InvoiceEventService', function () {
-    let memberRepositoryStub, eventRepositoryStub, productRepositoryStub, apiStub, service;
+    let memberRepositoryStub, eventRepositoryStub, productRepositoryStub, apiStub, service, metaCapiCaptureRenewal;
 
     beforeEach(function () {
+        metaCapiCaptureRenewal = sinon.stub(metaCapiService, 'captureRenewal');
         memberRepositoryStub = {
             get: sinon.stub()
         };
@@ -28,6 +30,10 @@ describe('InvoiceEventService', function () {
             productRepository: productRepositoryStub,
             api: apiStub
         });
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('should return early if invoice does not have a subscription, because its probably a donation', async function () {
@@ -131,6 +137,46 @@ describe('InvoiceEventService', function () {
 
         // sinon.assert.calledOnce(eventRepositoryStub.registerPayment);
         sinon.assert.calledOnce(eventRepositoryStub.registerPayment);
+    });
+
+    it('should send a Meta CAPI renewal Purchase for recurring payments', async function () {
+        const invoice = {
+            id: 'in_renewal_123',
+            subscription: 'sub_123',
+            plan: {product: 'product_123'},
+            amount_paid: 300,
+            paid: true,
+            billing_reason: 'subscription_cycle'
+        };
+        apiStub.getSubscription.resolves(invoice);
+        memberRepositoryStub.get.resolves({id: 'member_123'});
+        productRepositoryStub.get.resolves({stripe_product_id: 'product_123'});
+
+        await service.handleInvoiceEvent(invoice);
+
+        sinon.assert.calledOnceWithExactly(metaCapiCaptureRenewal, {
+            invoice,
+            member: {id: 'member_123'}
+        });
+    });
+
+    it('should not send a Meta CAPI renewal Purchase for the initial subscription invoice', async function () {
+        const invoice = {
+            id: 'in_first_123',
+            subscription: 'sub_123',
+            plan: {product: 'product_123'},
+            amount_paid: 300,
+            paid: true,
+            billing_reason: 'subscription_create'
+        };
+        apiStub.getSubscription.resolves(invoice);
+        memberRepositoryStub.get.resolves({id: 'member_123'});
+        productRepositoryStub.get.resolves({stripe_product_id: 'product_123'});
+
+        await service.handleInvoiceEvent(invoice);
+
+        sinon.assert.calledOnce(eventRepositoryStub.registerPayment);
+        sinon.assert.notCalled(metaCapiCaptureRenewal);
     });
 
     it('should not registerPayment if invoice is not paid', async function () {

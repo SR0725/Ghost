@@ -4,6 +4,42 @@ import {transformApiSiteData, transformApiTiersData, getUrlHistory} from './help
 function setupGhostApi({siteUrl = window.location.origin, apiUrl, apiKey}) {
     const apiPath = 'members/api';
 
+    function readCookie(name) {
+        const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const match = document.cookie.match(new RegExp('(?:^|; )' + escapedName + '=([^;]*)'));
+        return match ? decodeURIComponent(match[1]) : null;
+    }
+
+    function getMetaFbc() {
+        const existing = readCookie('_fbc');
+        if (existing) {
+            return existing;
+        }
+
+        const fbclid = new URL(window.location.href).searchParams.get('fbclid');
+        if (!fbclid) {
+            return null;
+        }
+
+        return 'fb.1.' + Date.now() + '.' + fbclid;
+    }
+
+    function createMetaEventId(prefix = 'ghost') {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            return prefix + '_' + window.crypto.randomUUID();
+        }
+
+        return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    }
+
+    function trackMetaEvent(eventName, params, eventId) {
+        if (!window.fbq || typeof window.fbq !== 'function') {
+            return;
+        }
+
+        window.fbq('track', eventName, params, eventId ? {eventID: eventId} : undefined);
+    }
+
     function endpointFor({type, resource}) {
         if (type === 'members') {
             return `${siteUrl.replace(/\/$/, '')}/${apiPath}/${resource}/`;
@@ -492,20 +528,38 @@ function setupGhostApi({siteUrl = window.location.origin, apiUrl, apiKey}) {
             const siteUrlObj = new URL(siteUrl);
             const identity = await api.member.identity();
             const url = endpointFor({type: 'members', resource: 'create-stripe-checkout-session'});
+            const metaEventId = createMetaEventId('checkout');
 
             if (!cancelUrl) {
                 const checkoutCancelUrl = window.location.href.startsWith(siteUrlObj.href) ? new URL(window.location.href) : new URL(siteUrl);
                 checkoutCancelUrl.searchParams.set('stripe', 'cancel');
                 cancelUrl = checkoutCancelUrl.href;
             }
+
+            if (!successUrl) {
+                const checkoutSuccessUrl = window.location.href.startsWith(siteUrlObj.href) ? new URL(window.location.href) : new URL(siteUrl);
+                checkoutSuccessUrl.searchParams.set('stripe', 'success');
+                checkoutSuccessUrl.searchParams.set('meta_event_id', metaEventId);
+                successUrl = checkoutSuccessUrl.href;
+            }
+
             const metadataObj = {
                 name,
                 newsletters: JSON.stringify(newsletters),
                 requestSrc: 'portal',
                 fp_tid: (window.FPROM || window.$FPROM)?.data?.tid,
+                meta_event_id: metaEventId,
                 urlHistory: getUrlHistory(),
                 ...metadata
             };
+            const metaFbp = readCookie('_fbp');
+            const metaFbc = getMetaFbc();
+            if (metaFbp) {
+                metadataObj.meta_fbp = metaFbp;
+            }
+            if (metaFbc) {
+                metadataObj.meta_fbc = metaFbc;
+            }
 
             const body = {
                 priceId: offerId ? null : plan,
@@ -525,6 +579,14 @@ function setupGhostApi({siteUrl = window.location.origin, apiUrl, apiKey}) {
                 body.tierId = offerId ? null : tierId;
                 body.cadence = offerId ? null : cadence;
             }
+
+            trackMetaEvent('InitiateCheckout', {
+                content_type: 'product',
+                content_ids: [tierId || plan || offerId].filter(Boolean),
+                content_name: 'AI 一人公司實戰攻略',
+                currency: 'TWD'
+            }, metaEventId);
+
             return makeRequest({
                 url,
                 method: 'POST',

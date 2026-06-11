@@ -1,11 +1,82 @@
 const _ = require('lodash');
+const ObjectId = require('bson-objectid').default;
 const errors = require('@tryghost/errors');
 const logging = require('@tryghost/logging');
+const db = require('../../../../data/db');
 const {getProductIdFromSubscription, isAllowedStripeProduct} = require('./stripe-product-filter');
+const posthogService = require('../../../posthog');
 const {
     canWelcomeEmailReplaceSignupPaidEmail
 } = require('../../../lib/member-signup-contexts');
+const metaCapiService = require('../../../meta-capi');
 /** @typedef {import('../../../lib/member-signup-contexts').SignupContext} SignupContext */
+
+function getMemberId(member) {
+    return member?.id || member?.get?.('id') || null;
+}
+
+function isStartHereAttributionUrl(url) {
+    if (!url || typeof url !== 'string') {
+        return false;
+    }
+
+    try {
+        const parsed = new URL(url, 'https://ghost.local');
+        const path = parsed.pathname.replace(/\/+$/, '') || '/';
+
+        return path === '/start-here';
+    } catch (err) {
+        return false;
+    }
+}
+
+async function ensureStartHereLabelForMember(memberId) {
+    if (!memberId) {
+        return;
+    }
+
+    const now = new Date();
+    let label = await db.knex('labels').where({slug: 'start-here'}).first();
+
+    if (!label) {
+        const labelId = ObjectId().toHexString();
+        try {
+            await db.knex('labels').insert({
+                id: labelId,
+                name: 'start-here',
+                slug: 'start-here',
+                created_at: now,
+                updated_at: now
+            });
+        } catch (err) {
+            label = await db.knex('labels').where({slug: 'start-here'}).first();
+            if (!label) {
+                throw err;
+            }
+        }
+        label = label || {id: labelId};
+    }
+
+    const existing = await db.knex('members_labels')
+        .where({
+            member_id: memberId,
+            label_id: label.id
+        })
+        .first();
+
+    if (!existing) {
+        try {
+            await db.knex('members_labels').insert({
+                id: ObjectId().toHexString(),
+                member_id: memberId,
+                label_id: label.id,
+                sort_order: 0
+            });
+        } catch (err) {
+            logging.warn(`Failed to add start-here label to member ${memberId}: ${err.message}`);
+        }
+    }
+}
 
 /**
  * Handles `checkout.session.completed` webhook events
@@ -36,6 +107,24 @@ module.exports = class CheckoutSessionEventService {
     constructor(deps) {
         this.api = deps.api;
         this.deps = deps;
+    }
+
+    async ensureStartHereLabelForCheckout(member, session) {
+        if (!isStartHereAttributionUrl(session.metadata?.attribution_url)) {
+            return;
+        }
+
+        const memberId = getMemberId(member);
+        if (!memberId) {
+            return;
+        }
+
+        if (this.deps.startHereLabeler?.ensureStartHereLabelForMember) {
+            await this.deps.startHereLabeler.ensureStartHereLabelForMember(memberId);
+            return;
+        }
+
+        await ensureStartHereLabelForMember(memberId);
     }
 
     /**
@@ -76,6 +165,11 @@ module.exports = class CheckoutSessionEventService {
             amount: session.amount_total,
             stripeCheckoutSessionId: session.id,
             stripePaymentIntentId: session.payment_intent
+        });
+
+        metaCapiService.capturePurchase({
+            session,
+            contentName: 'Gift subscription'
         });
     }
 
@@ -118,6 +212,12 @@ module.exports = class CheckoutSessionEventService {
 
         const staffServiceEmails = this.deps.staffServiceEmails;
         await staffServiceEmails.notifyDonationReceived({donationPaymentEvent: data});
+
+        metaCapiService.capturePurchase({
+            session,
+            member,
+            contentName: 'Donation'
+        });
     }
 
     /**
@@ -337,6 +437,8 @@ module.exports = class CheckoutSessionEventService {
             }
         }
 
+        await this.ensureStartHereLabelForCheckout(member, session);
+
         if (checkoutType !== 'upgrade') {
             const ghostSignupContext = /** @type {SignupContext | undefined} */ (session.metadata?.ghostSignupContext);
             const shouldSkipSignupEmailWhenWelcomeEmailActive = canWelcomeEmailReplaceSignupPaidEmail(ghostSignupContext);
@@ -351,5 +453,34 @@ module.exports = class CheckoutSessionEventService {
                 this.deps.sendSignupEmail(customer.email);
             }
         }
+
+        // Reuse the browser distinct_id stashed at checkout creation so this
+        // payment attributes to the same PostHog person as the funnel's
+        // client-side events; fall back to email so revenue is still recorded.
+        posthogService.capture({
+            distinctId: session.metadata?.ph_distinct_id || customer.email,
+            event: 'payment_succeeded',
+            properties: {
+                // amount_total is in the currency's smallest unit. TWD is a
+                // zero-decimal currency, so this is already the real NT$ value.
+                amount: typeof session.amount_total === 'number' ? session.amount_total : null,
+                currency: session.currency ?? null,
+                checkout_session_id: session.id ?? null,
+                attribution_url: session.metadata?.attribution_url ?? null,
+                utm_source: session.metadata?.utm_source ?? null
+            }
+        });
+
+        metaCapiService.capturePurchase({
+            session,
+            customer,
+            member
+        });
+
+        metaCapiService.captureSubscribe({
+            session,
+            customer,
+            member
+        });
     }
 };
