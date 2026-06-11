@@ -17,6 +17,8 @@ const EVENT_TYPES = new Set([
     'impression',
     'authorized',
     'unauthorized',
+    'preview_start',
+    'preview_complete',
     'play',
     'watch',
     'progress_25',
@@ -36,6 +38,8 @@ const DEDUPE_EVENT_TYPES = new Set([
     'impression',
     'authorized',
     'unauthorized',
+    'preview_start',
+    'preview_complete',
     'play',
     'progress_25',
     'progress_50',
@@ -51,6 +55,21 @@ const EVENT_BUDGET_PER_SESSION_PER_VIDEO = 300;
 const WATCH_EVENT_MIN_INTERVAL_MS = 20 * 1000;
 const EVENT_COOKIE_NAME = 'ghost-course-video-session';
 const EVENT_COOKIE_MAX_AGE_SECONDS = 6 * 60 * 60;
+const PREVIEW_EVENT_TYPES = new Set([
+    'impression',
+    'unauthorized',
+    'preview_start',
+    'preview_complete',
+    'play',
+    'watch',
+    'dock',
+    'undock',
+    'close',
+    'cta_view',
+    'cta_click',
+    'error'
+]);
+let cloudflareSigningKeyCreatePromise = null;
 
 function base64url(value) {
     return Buffer.from(value)
@@ -108,6 +127,19 @@ function getRequiredAccess(courseVideo) {
     return courseVideo?.access || ACCESS.PUBLIC;
 }
 
+function getPreview(courseVideo, member) {
+    if (!courseVideo || hasAccess(courseVideo, member)) {
+        return {
+            enabled: false
+        };
+    }
+
+    return {
+        enabled: false,
+        required_access: getRequiredAccess(courseVideo)
+    };
+}
+
 async function getCourseVideoForPostUuid(postUuid) {
     const post = await models.Post.findOne({uuid: postUuid, status: 'published'}, {withRelated: ['course_video']});
 
@@ -128,14 +160,7 @@ function getCloudflareCustomerCode() {
     return settingsCache.get('course_video_cloudflare_customer_code');
 }
 
-function createCloudflareToken(videoUID) {
-    const keyID = settingsCache.get('course_video_cloudflare_signing_key_id');
-    const jwkRaw = settingsCache.get('course_video_cloudflare_signing_key_jwk');
-
-    if (!keyID || !jwkRaw) {
-        return null;
-    }
-
+function createCloudflareTokenWithKey(videoUID, keyID, jwkRaw) {
     let jwk;
     try {
         jwk = JSON.parse(jwkRaw);
@@ -143,7 +168,7 @@ function createCloudflareToken(videoUID) {
         jwk = JSON.parse(Buffer.from(jwkRaw, 'base64').toString('utf8'));
     }
 
-    const privateKey = crypto.createPrivateKey({
+    const signingKeyObject = crypto.createPrivateKey({
         key: jwk,
         format: 'jwk'
     });
@@ -162,9 +187,87 @@ function createCloudflareToken(videoUID) {
     const signer = crypto.createSign('RSA-SHA256');
     signer.update(token);
     signer.end();
-    const signature = signer.sign(privateKey);
+    const signature = signer.sign(signingKeyObject);
 
     return `${token}.${base64url(signature)}`;
+}
+
+function getCloudflareSigningKeyConfig() {
+    const keyID = settingsCache.get('course_video_cloudflare_signing_key_id');
+    const jwkRaw = settingsCache.get('course_video_cloudflare_signing_key_jwk');
+
+    if (!keyID || !jwkRaw) {
+        return null;
+    }
+
+    return {
+        keyID,
+        jwkRaw
+    };
+}
+
+async function createCloudflareSigningKey() {
+    const accountID = settingsCache.get('course_video_cloudflare_account_id');
+    const apiToken = settingsCache.get('course_video_cloudflare_api_token');
+
+    if (!accountID || !apiToken) {
+        throw new errors.InternalServerError({
+            message: 'Cloudflare Stream is not configured'
+        });
+    }
+
+    const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountID}/stream/keys`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${apiToken}`,
+            'content-type': 'application/json'
+        },
+        body: JSON.stringify({})
+    });
+    const data = await response.json();
+    const keyID = data.result?.id || data.result?.key_id;
+    const jwkRaw = data.result?.jwk;
+
+    if (!response.ok || !data.success || !keyID || !jwkRaw) {
+        throw new errors.InternalServerError({
+            message: 'Could not create Cloudflare Stream signing key'
+        });
+    }
+
+    await models.Settings.edit([{
+        key: 'course_video_cloudflare_signing_key_id',
+        value: keyID
+    }, {
+        key: 'course_video_cloudflare_signing_key_jwk',
+        value: jwkRaw
+    }], {context: {internal: true}});
+
+    return {
+        keyID,
+        jwkRaw
+    };
+}
+
+async function getOrCreateCloudflareSigningKeyConfig() {
+    const existing = getCloudflareSigningKeyConfig();
+    if (existing) {
+        return existing;
+    }
+
+    if (!cloudflareSigningKeyCreatePromise) {
+        cloudflareSigningKeyCreatePromise = createCloudflareSigningKey()
+            .finally(() => {
+                cloudflareSigningKeyCreatePromise = null;
+            });
+    }
+
+    return cloudflareSigningKeyCreatePromise;
+}
+
+async function createCloudflareToken(videoUID) {
+    const signingKey = await getOrCreateCloudflareSigningKeyConfig();
+
+    return createCloudflareTokenWithKey(videoUID, signingKey.keyID, signingKey.jwkRaw);
 }
 
 async function createCloudflareTokenFromAPI(videoUID) {
@@ -239,7 +342,7 @@ async function getCloudflareIframeUrl(courseVideo) {
 
         let localToken = null;
         try {
-            localToken = createCloudflareToken(courseVideo.provider_video_id);
+            localToken = await createCloudflareToken(courseVideo.provider_video_id);
         } catch (e) {
             localToken = null;
         }
@@ -267,6 +370,42 @@ async function getIframeUrl(courseVideo) {
     throw new errors.BadRequestError({
         message: 'Unsupported course video provider'
     });
+}
+
+async function getCloudflareVideoDuration(videoUID) {
+    const accountID = settingsCache.get('course_video_cloudflare_account_id');
+    const apiToken = settingsCache.get('course_video_cloudflare_api_token');
+
+    if (!accountID || !apiToken) {
+        return null;
+    }
+
+    const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountID}/stream/${videoUID}`, {
+        headers: {
+            Authorization: `Bearer ${apiToken}`
+        }
+    });
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+        return null;
+    }
+
+    const duration = Number(data.result?.duration);
+
+    if (!Number.isFinite(duration) || duration <= 0) {
+        return null;
+    }
+
+    return Math.round(duration);
+}
+
+async function getVideoDuration(courseVideo) {
+    if (courseVideo.provider === 'cloudflare_stream') {
+        return getCloudflareVideoDuration(courseVideo.provider_video_id);
+    }
+
+    return null;
 }
 
 function clampInteger(value, min, max) {
@@ -496,7 +635,7 @@ async function recordEventForPostUuid(postUuid, member, payload, browserSession)
         throw new errors.NoPermissionError({message: 'Invalid course video event token.'});
     }
 
-    if (!canAccess && !['impression', 'unauthorized', 'cta_view', 'cta_click', 'error'].includes(event.event_type)) {
+    if (!canAccess && !PREVIEW_EVENT_TYPES.has(event.event_type)) {
         throw new errors.NoPermissionError({message: 'You do not have access to this course video.'});
     }
 
@@ -648,8 +787,10 @@ module.exports = {
     ACCESS,
     hasAccess,
     getRequiredAccess,
+    getPreview,
     getCourseVideoForPostUuid,
     getIframeUrl,
+    getVideoDuration,
     normalizeYouTubeId,
     ensureBrowserSessionCookie,
     getBrowserSessionFromRequest,

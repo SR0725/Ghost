@@ -45,12 +45,12 @@ module.exports = createTransactionalMigration(
     async function up(knex) {
         const now = knex.raw('CURRENT_TIMESTAMP');
 
-        for (const setting of settings) {
+        await Promise.all(settings.map(async (setting) => {
             const existing = await knex('settings').where('key', '=', setting.key).first();
 
             if (existing) {
                 logging.warn(`Skipping adding setting: ${setting.key} - setting already exists`);
-                continue;
+                return;
             }
 
             await knex('settings').insert({
@@ -59,7 +59,7 @@ module.exports = createTransactionalMigration(
                 created_at: now,
                 ...setting
             });
-        }
+        }));
     },
     async function down(knex) {
         await knex('settings')

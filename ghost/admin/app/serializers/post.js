@@ -9,6 +9,7 @@ export default class PostSerializer extends ApplicationSerializer.extend(Embedde
         publishedAtUTC: {key: 'published_at'},
         createdAtUTC: {key: 'created_at'},
         updatedAtUTC: {key: 'updated_at'},
+        courseVideo: {key: 'course_video'},
         email: {embedded: 'always'},
         newsletter: {embedded: 'always'},
         postRevisions: {embedded: 'always'}

@@ -61,6 +61,10 @@ module.exports = {
         return apiFramework.pipeline(require('./posts'), localUtils);
     },
 
+    get courseVideos() {
+        return apiFramework.pipeline(require('./course-videos'), localUtils);
+    },
+
     get mentions() {
         return apiFramework.pipeline(require('./mentions'), localUtils);
     },

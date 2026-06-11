@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const {hasAccess, normalizeYouTubeId} = require('../../../../core/server/services/course-videos');
+const {getPreview, hasAccess, normalizeYouTubeId} = require('../../../../core/server/services/course-videos');
 
 describe('Course videos service', function () {
     describe('hasAccess', function () {
@@ -49,6 +49,34 @@ describe('Course videos service', function () {
             const courseVideo = {enabled: true, access: 'paid'};
 
             assert.equal(hasAccess(courseVideo, {status: 'comped'}), true);
+        });
+    });
+
+    describe('getPreview', function () {
+        it('does not return an insecure preview for anonymous visitors on paid videos', function () {
+            const courseVideo = {enabled: true, access: 'paid'};
+
+            assert.deepEqual(getPreview(courseVideo, null), {
+                enabled: false,
+                required_access: 'paid'
+            });
+        });
+
+        it('does not return an insecure preview for free members on paid videos', function () {
+            const courseVideo = {enabled: true, access: 'paid'};
+
+            assert.deepEqual(getPreview(courseVideo, {status: 'free'}), {
+                enabled: false,
+                required_access: 'paid'
+            });
+        });
+
+        it('does not return a preview for authorized members', function () {
+            const courseVideo = {enabled: true, access: 'members'};
+
+            assert.deepEqual(getPreview(courseVideo, {status: 'free'}), {
+                enabled: false
+            });
         });
     });
 

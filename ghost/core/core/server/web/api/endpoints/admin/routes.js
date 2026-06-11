@@ -6,6 +6,7 @@ const apiMw = require('../../middleware');
 const mw = require('./middleware');
 
 const shared = require('../../../shared');
+const startHereSurvey = require('../../../../services/start-here-survey');
 
 /**
  * @returns {import('express').Router}
@@ -14,6 +15,17 @@ module.exports = function apiRoutes() {
     const router = express.Router('admin api');
 
     router.use(apiMw.cors);
+
+    // Start Here 訂閱問卷分析（admin-only，提供給自訂 dashboard 頁面）
+    router.get('/start-here-surveys', mw.authAdminApi, async function getStartHereSurveyAnalytics(req, res, next) {
+        try {
+            const analytics = await startHereSurvey.getAnalytics();
+            res.writeHead(200, {'Content-Type': 'application/json'});
+            res.end(JSON.stringify({start_here_survey_analytics: analytics}));
+        } catch (err) {
+            next(err);
+        }
+    });
 
     // ## Public
     router.get('/site', mw.publicAdminApi, http(api.site.read));
@@ -32,6 +44,9 @@ module.exports = function apiRoutes() {
     router.post('/posts', mw.authAdminApi, http(api.posts.add));
     router.delete('/posts', mw.authAdminApi, http(api.posts.bulkDestroy));
     router.put('/posts/bulk', mw.authAdminApi, http(api.posts.bulkEdit));
+    router.get('/posts/:id/course_video', mw.authAdminApi, http(api.courseVideos.read));
+    router.put('/posts/:id/course_video', mw.authAdminApi, http(api.courseVideos.edit));
+    router.delete('/posts/:id/course_video', mw.authAdminApi, http(api.courseVideos.destroy));
     router.get('/posts/:id', mw.authAdminApi, http(api.posts.read));
     router.get('/posts/slug/:slug', mw.authAdminApi, http(api.posts.read));
     router.put('/posts/:id', mw.authAdminApi, http(api.posts.edit));

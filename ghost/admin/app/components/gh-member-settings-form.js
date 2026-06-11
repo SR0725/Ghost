@@ -12,6 +12,7 @@ export default class extends Component {
     @service store;
     @service feature;
     @service settings;
+    @service labelsManager;
 
     constructor(...args) {
         super(...args);
@@ -93,6 +94,26 @@ export default class extends Component {
         );
     }
 
+    get isStartHereCourseSubscriber() {
+        return this.memberLabels.some((label) => {
+            return label?.slug === 'start-here' || label?.name === 'start-here';
+        });
+    }
+
+    get memberLabels() {
+        const labels = this.member.get('labels') || [];
+
+        if (typeof labels.toArray === 'function') {
+            return labels.toArray();
+        }
+
+        if (Array.isArray(labels)) {
+            return labels;
+        }
+
+        return [];
+    }
+
     @action
     updateNewsletterPreference(event) {
         if (!event.target.checked) {
@@ -131,6 +152,48 @@ export default class extends Component {
     @action
     setLabels(labels) {
         this.member.set('labels', labels);
+    }
+
+    @action
+    setStartHereCourseSubscriber(event) {
+        this.setStartHereCourseSubscriberState(event.target.checked);
+    }
+
+    @action
+    toggleStartHereCourseSubscriber() {
+        this.setStartHereCourseSubscriberState(!this.isStartHereCourseSubscriber);
+    }
+
+    setStartHereCourseSubscriberState(enabled) {
+        const labelsRelationship = this.member.get('labels') || [];
+        const labels = this.memberLabels;
+        const existingLabel = labels.find((label) => {
+            return label?.slug === 'start-here' || label?.name === 'start-here';
+        });
+
+        if (enabled && !existingLabel) {
+            let label = this.labelsManager.findBySlug('start-here');
+
+            if (!label) {
+                label = this.store.createRecord('label', {
+                    name: 'start-here'
+                });
+            }
+
+            if (typeof labelsRelationship.pushObject === 'function') {
+                labelsRelationship.pushObject(label);
+            } else {
+                this.member.set('labels', [...labels, label]);
+            }
+        }
+
+        if (!enabled && existingLabel) {
+            if (typeof labelsRelationship.removeObject === 'function') {
+                labelsRelationship.removeObject(existingLabel);
+            } else {
+                this.member.set('labels', labels.filter(label => label !== existingLabel));
+            }
+        }
     }
 
     @action

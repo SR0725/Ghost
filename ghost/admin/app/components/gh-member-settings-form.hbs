@@ -39,6 +39,28 @@
                         </GhFormGroup>
                     </div>
 
+                    <GhFormGroup class="gh-member-course-experience">
+                        <div class="gh-member-course-experience-header">
+                            <div>
+                                <label for="member-start-here-course-subscriber">Course experience</label>
+                                <p>Show the course-style reading interface for this member.</p>
+                            </div>
+                            <button
+                                type="button"
+                                id="member-start-here-course-subscriber"
+                                class="gh-btn {{if this.isStartHereCourseSubscriber "gh-btn-green" "gh-btn-outline"}} gh-member-course-experience-button"
+                                aria-pressed={{if this.isStartHereCourseSubscriber "true" "false"}}
+                                {{on "click" this.toggleStartHereCourseSubscriber}}
+                                data-test-button="member-start-here-course-subscriber"
+                            >
+                                <span>{{if this.isStartHereCourseSubscriber "Enabled" "Enable"}}</span>
+                            </button>
+                        </div>
+                        <p class="gh-member-course-experience-note">
+                            Uses the <code>start-here</code> label so you can manually test Start Here subscribers.
+                        </p>
+                    </GhFormGroup>
+
                     <GhFormGroup class="gh-member-labels">
                         <label for="label-input">Labels</label>
                         <GhMemberLabelInput

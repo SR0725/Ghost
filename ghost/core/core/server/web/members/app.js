@@ -16,6 +16,8 @@ const commentRouter = require('../comments');
 const announcementRouter = require('../announcement');
 const corsMiddleware = require('./middleware/cors');
 const courseVideos = require('../../services/course-videos');
+const courseMode = require('../../services/course-mode');
+const startHereSurvey = require('../../services/start-here-survey');
 
 /**
  * @returns {import('express').Application}
@@ -191,21 +193,24 @@ module.exports = function setupMembersApp() {
                 }));
             }
 
-            if (!courseVideos.hasAccess(courseVideo, req.member)) {
-                const eventToken = courseVideos.getCourseVideoEventToken(courseVideo, req.get('x-ghost-course-video-session'), browserSession);
+            const authorized = courseVideos.hasAccess(courseVideo, req.member);
+            const preview = courseVideos.getPreview(courseVideo, req.member);
+            const eventToken = courseVideos.getCourseVideoEventToken(courseVideo, req.get('x-ghost-course-video-session'), browserSession);
 
+            if (!authorized) {
                 res.writeHead(403, {'Content-Type': 'application/json'});
                 return res.end(JSON.stringify({
                     errors: [{
-                        message: 'You do not have access to this course video.',
-                        required_access: courseVideos.getRequiredAccess(courseVideo),
+                        message: 'This course video requires additional access.',
+                        required_access: courseVideo.access,
+                        preview,
                         event_token: eventToken
                     }]
                 }));
             }
 
             const iframeUrl = await courseVideos.getIframeUrl(courseVideo);
-            const eventToken = courseVideos.getCourseVideoEventToken(courseVideo, req.get('x-ghost-course-video-session'), browserSession);
+            const durationSeconds = await courseVideos.getVideoDuration(courseVideo);
 
             res.writeHead(200, {'Content-Type': 'application/json'});
             res.end(JSON.stringify({
@@ -214,8 +219,40 @@ module.exports = function setupMembersApp() {
                     title: courseVideo.title,
                     access: courseVideo.access,
                     iframe_url: iframeUrl,
-                    event_token: eventToken
+                    duration_seconds: durationSeconds,
+                    event_token: eventToken,
+                    authorized,
+                    preview
                 }
+            }));
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    membersApp.get('/api/course-mode', middleware.loadMemberSession, async function getCourseMode(req, res, next) {
+        try {
+            const catalog = await courseMode.getCatalog(req.member, {
+                post_uuid: req.query.post_uuid,
+                current_path: req.query.path
+            });
+
+            res.writeHead(200, {'Content-Type': 'application/json'});
+            res.end(JSON.stringify({
+                course_mode: catalog
+            }));
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    membersApp.put('/api/course-mode/progress', bodyParser.json({limit: '20kb'}), middleware.loadMemberSession, async function updateCourseModeProgress(req, res, next) {
+        try {
+            const progress = await courseMode.setProgress(req.member, req.body);
+
+            res.writeHead(200, {'Content-Type': 'application/json'});
+            res.end(JSON.stringify({
+                course_post_progress: progress
             }));
         } catch (err) {
             next(err);
@@ -235,6 +272,62 @@ module.exports = function setupMembersApp() {
             res.end(JSON.stringify({
                 course_video_event: result
             }));
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    /* Start Here 訂閱問卷 — 三個 endpoint。
+       Gate 順序：必須有 session（401）→ 必須是 eligible（paid + start-here 標籤，403）→ 才動作。 */
+
+    async function requireEligibleMember(req, res) {
+        if (!req.member) {
+            res.writeHead(401, {'Content-Type': 'application/json'});
+            res.end(JSON.stringify({errors: [{message: 'Sign in required'}]}));
+            return false;
+        }
+        if (!await startHereSurvey.isEligibleMember(req.member)) {
+            res.writeHead(403, {'Content-Type': 'application/json'});
+            res.end(JSON.stringify({errors: [{message: 'Not eligible for Start Here survey'}]}));
+            return false;
+        }
+        return true;
+    }
+
+    membersApp.get('/api/start-here-survey', middleware.loadMemberSession, async function getStartHereSurvey(req, res, next) {
+        try {
+            if (!await requireEligibleMember(req, res)) {
+                return;
+            }
+            const survey = await startHereSurvey.getSurveyForMember(req.member);
+            res.writeHead(200, {'Content-Type': 'application/json'});
+            res.end(JSON.stringify({start_here_survey: survey}));
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    membersApp.post('/api/start-here-survey', bodyParser.json({limit: '20kb'}), middleware.loadMemberSession, async function postStartHereSurvey(req, res, next) {
+        try {
+            if (!await requireEligibleMember(req, res)) {
+                return;
+            }
+            const result = await startHereSurvey.submitSurvey(req.member, req.body);
+            res.writeHead(result.created ? 201 : 200, {'Content-Type': 'application/json'});
+            res.end(JSON.stringify({start_here_survey: result}));
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    membersApp.post('/api/start-here-survey/dismiss', middleware.loadMemberSession, async function dismissStartHereSurvey(req, res, next) {
+        try {
+            if (!await requireEligibleMember(req, res)) {
+                return;
+            }
+            const result = await startHereSurvey.markDismissed(req.member);
+            res.writeHead(200, {'Content-Type': 'application/json'});
+            res.end(JSON.stringify({start_here_survey: result}));
         } catch (err) {
             next(err);
         }

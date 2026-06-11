@@ -331,6 +331,10 @@ module.exports = async function ghost_head(options) { // eslint-disable-line cam
             head.push(`<script defer src="${getAssetUrl('public/course-video.min.js')}" data-ghost-course-video-api="${urlUtils.getSiteUrl(true)}members/api/course-video/"></script>`);
         }
 
+        if (!excludeList.has('course_mode') && settingsCache.get('members_enabled') && dataRoot.post?.uuid && (_.includes(context, 'post') || _.includes(context, 'page'))) {
+            head.push(`<script defer src="${getAssetUrl('public/course-mode.min.js')}" data-ghost-course-mode-api="${urlUtils.getSiteUrl(true)}members/api/course-mode" data-post-uuid="${escapeExpression(dataRoot.post.uuid)}"></script>`);
+        }
+
         if (settingsCache.get('members_enabled') && settingsCache.get('members_track_sources')) {
             head.push(`<script defer src="${getAssetUrl('public/member-attribution.min.js')}"></script>`);
         }

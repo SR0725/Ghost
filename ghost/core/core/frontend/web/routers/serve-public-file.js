@@ -136,6 +136,7 @@ function servePublicFiles(siteApp) {
 
     // Course video player
     siteApp.get('/public/course-video.min.js', createPublicFileMiddleware('static', 'public/course-video.min.js', 'application/javascript', config.get('caching:publicAssets:maxAge')));
+    siteApp.get('/public/course-mode.min.js', createPublicFileMiddleware('static', 'public/course-mode.min.js', 'application/javascript', config.get('caching:publicAssets:maxAge')));
 
     // Member attribution
     siteApp.get('/public/member-attribution.min.js', createPublicFileMiddleware('static', 'public/member-attribution.min.js', 'application/javascript', config.get('caching:publicAssets:maxAge')));

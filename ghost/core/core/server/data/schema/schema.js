@@ -230,13 +230,13 @@ module.exports = {
             maxlength: 50,
             nullable: false,
             defaultTo: 'core',
-                validations: {
-                    isIn: [[
-                        'core',
-                        'course_video',
-                        'email',
-                        'labs',
-                        'members',
+            validations: {
+                isIn: [[
+                    'core',
+                    'course_video',
+                    'email',
+                    'labs',
+                    'members',
                     'portal',
                     'private',
                     'site',
@@ -328,6 +328,39 @@ module.exports = {
             {columns: ['post_course_video_id', 'event_type'], name: 'cve_video_event_idx'},
             {columns: ['post_id', 'created_at'], name: 'cve_post_created_idx'},
             {columns: ['session_id', 'post_course_video_id', 'event_type'], name: 'cve_session_video_event_idx'}
+        ]
+    },
+    course_post_progress: {
+        id: {type: 'string', maxlength: 24, nullable: false, primary: true},
+        member_id: {type: 'string', maxlength: 24, nullable: false, references: 'members.id'},
+        post_id: {type: 'string', maxlength: 24, nullable: false, references: 'posts.id'},
+        completed_at: {type: 'dateTime', nullable: true},
+        created_at: {type: 'dateTime', nullable: false},
+        updated_at: {type: 'dateTime', nullable: true},
+        '@@INDEXES@@': [
+            {columns: ['member_id', 'post_id'], name: 'cpp_member_post_unique', unique: true},
+            {columns: ['member_id', 'completed_at'], name: 'cpp_member_completed_idx'}
+        ]
+    },
+    start_here_surveys: {
+        id: {type: 'string', maxlength: 24, nullable: false, primary: true},
+        member_id: {type: 'string', maxlength: 24, nullable: false, references: 'members.id'},
+        q1_situation: {type: 'string', maxlength: 50, nullable: true},
+        q2_reasons: {type: 'text', maxlength: 65535, nullable: true},
+        q3_top_topics: {type: 'text', maxlength: 65535, nullable: true},
+        q4_blocker: {type: 'text', maxlength: 65535, nullable: true},
+        q5_source: {type: 'string', maxlength: 50, nullable: true},
+        q6_kpi: {type: 'text', maxlength: 65535, nullable: true},
+        q1_other: {type: 'string', maxlength: 191, nullable: true},
+        q2_other: {type: 'string', maxlength: 191, nullable: true},
+        q3_other: {type: 'string', maxlength: 191, nullable: true},
+        q5_other: {type: 'string', maxlength: 191, nullable: true},
+        dismissed_at: {type: 'dateTime', nullable: true},
+        created_at: {type: 'dateTime', nullable: false},
+        updated_at: {type: 'dateTime', nullable: false},
+        '@@INDEXES@@': [
+            {columns: ['member_id'], name: 'shs_member_unique', unique: true},
+            {columns: ['created_at'], name: 'shs_created_idx'}
         ]
     },
     posts_tags: {

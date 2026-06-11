@@ -33,6 +33,7 @@ describe('Exporter', function () {
             'comments',
             'comment_likes',
             'comment_reports',
+            'course_post_progress',
             'course_video_events',
             'custom_theme_settings',
             'donation_payment_events',
@@ -137,6 +138,7 @@ describe('Exporter', function () {
             'members_status_events',
             'members_paid_subscription_events',
             'members_subscribe_events',
+            'course_post_progress',
             'course_video_events',
             'outbox',
             'gifts'

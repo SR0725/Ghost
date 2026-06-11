@@ -173,6 +173,7 @@ export default class GhPostSettingsMenu extends Component {
         return !this.themeManagement.activeTheme.hasPageBuilderFeature('show_title_and_feature_image');
     }
 
+    @computed('post.courseVideo')
     get courseVideo() {
         return this.post.courseVideo || {
             enabled: false,
@@ -181,6 +182,21 @@ export default class GhPostSettingsMenu extends Component {
             access: 'public',
             title: ''
         };
+    }
+
+    setCourseVideoField(field, value) {
+        const courseVideo = {
+            enabled: false,
+            provider: 'youtube',
+            provider_video_id: '',
+            access: 'public',
+            title: '',
+            ...(this.post.courseVideo || {}),
+            [field]: value
+        };
+
+        this.post.set('courseVideo', courseVideo);
+        this.notifyPropertyChange('courseVideo');
     }
 
     willDestroyElement() {
@@ -249,17 +265,7 @@ export default class GhPostSettingsMenu extends Component {
 
     @action
     updateCourseVideoField(field, value) {
-        const courseVideo = {
-            enabled: false,
-            provider: 'youtube',
-            provider_video_id: '',
-            access: 'public',
-            title: '',
-            ...(this.post.courseVideo || {})
-        };
-
-        courseVideo[field] = value;
-        this.post.set('courseVideo', courseVideo);
+        this.setCourseVideoField(field, value);
 
         if (this.post.isNew) {
             return;
@@ -268,6 +274,7 @@ export default class GhPostSettingsMenu extends Component {
         this.savePostTask.perform().catch((error) => {
             this.showError(error);
             this.post.rollbackAttributes();
+            this.notifyPropertyChange('courseVideo');
         });
     }
 
@@ -278,12 +285,25 @@ export default class GhPostSettingsMenu extends Component {
 
     @action
     updateCourseVideoId(event) {
-        this.updateCourseVideoField('provider_video_id', event.target.value);
+        this.setCourseVideoField('provider_video_id', event.target.value);
     }
 
     @action
     updateCourseVideoTitle(event) {
-        this.updateCourseVideoField('title', event.target.value);
+        this.setCourseVideoField('title', event.target.value);
+    }
+
+    @action
+    saveCourseVideoField() {
+        if (this.post.isNew) {
+            return;
+        }
+
+        this.savePostTask.perform().catch((error) => {
+            this.showError(error);
+            this.post.rollbackAttributes();
+            this.notifyPropertyChange('courseVideo');
+        });
     }
 
     @action

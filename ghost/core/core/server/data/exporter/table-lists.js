@@ -44,6 +44,7 @@ const BACKUP_TABLES = [
     'comments',
     'comment_likes',
     'comment_reports',
+    'course_post_progress',
     'course_video_events',
     'jobs',
     'redirects',

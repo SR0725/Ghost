@@ -442,6 +442,36 @@ textarea.gh-member-details-textarea {
     max-width: none;
 }
 
+.gh-member-course-experience {
+    width: 100%;
+    max-width: none;
+    margin-top: 4px;
+}
+
+.gh-member-course-experience-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.gh-member-course-experience-header label {
+    margin: 0;
+}
+
+.gh-member-course-experience-header p,
+.gh-member-course-experience-note {
+    margin: 4px 0 0;
+    color: var(--middarkgrey);
+    font-size: 1.3rem;
+    line-height: 1.4em;
+}
+
+.gh-member-course-experience-button {
+    min-width: 82px;
+    justify-content: center;
+}
+
 .gh-member-cancelstripe-checkbox {
     margin-bottom: 4px;
 }

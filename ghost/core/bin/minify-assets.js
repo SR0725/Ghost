@@ -77,6 +77,13 @@ const filesToMinify = [
         }
     },
     {
+        src: 'core/frontend/src/course-mode/course-mode.js',
+        dest: 'core/frontend/public/course-mode.min.js',
+        options: {
+            bundle: false
+        }
+    },
+    {
         src: 'core/frontend/src/admin-auth/message-handler.js',
         dest: 'core/frontend/public/admin-auth/admin-auth.min.js',
         options: {
@@ -123,7 +130,7 @@ const filesToMinify = [
             const bundleStatus = buildConfig.bundle ? 'bundled + minified' : 'minified';
             logging.debug(`✓ ${file.src} → ${file.dest} (${bundleStatus})`);
         } catch (error) {
-            console.error(`✗ Error processing ${file.src}:`, error);
+            logging.error(`✗ Error processing ${file.src}: ${error.message}`);
             process.exit(1);
         }
     }

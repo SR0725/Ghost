@@ -131,7 +131,8 @@
                                     @id="course-video-id"
                                     @name="course-video-id"
                                     @value={{readonly this.courseVideo.provider_video_id}}
-                                    @input={{this.updateCourseVideoId}}
+                                    {{on "input" this.updateCourseVideoId}}
+                                    @focus-out={{this.saveCourseVideoField}}
                                     @stopEnterKeyDownPropagation={{true}}
                                     data-test-field="course-video-id" />
                                 {{#if (eq this.courseVideo.provider "cloudflare_stream")}}
@@ -144,7 +145,8 @@
                                     @id="course-video-title"
                                     @name="course-video-title"
                                     @value={{readonly this.courseVideo.title}}
-                                    @input={{this.updateCourseVideoTitle}}
+                                    {{on "input" this.updateCourseVideoTitle}}
+                                    @focus-out={{this.saveCourseVideoField}}
                                     @stopEnterKeyDownPropagation={{true}}
                                     data-test-field="course-video-title" />
 
