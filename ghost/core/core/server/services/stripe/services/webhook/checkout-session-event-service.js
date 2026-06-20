@@ -461,9 +461,14 @@ module.exports = class CheckoutSessionEventService {
             distinctId: session.metadata?.ph_distinct_id || customer.email,
             event: 'payment_succeeded',
             properties: {
-                // amount_total is in the currency's smallest unit. TWD is a
-                // zero-decimal currency, so this is already the real NT$ value.
-                amount: typeof session.amount_total === 'number' ? session.amount_total : null,
+                // amount_total is in the currency's minor unit. TWD is a
+                // TWO-decimal currency in Stripe (NT$3,000 → 300000), so convert
+                // to the major unit. centsToMajor leaves true zero-decimal
+                // currencies (JPY/KRW/…) untouched.
+                amount: metaCapiService._private.centsToMajor(
+                    typeof session.amount_total === 'number' ? session.amount_total : null,
+                    session.currency
+                ),
                 currency: session.currency ?? null,
                 checkout_session_id: session.id ?? null,
                 attribution_url: session.metadata?.attribution_url ?? null,

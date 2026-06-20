@@ -9,20 +9,23 @@ function sha256(value) {
 
 describe('Meta CAPI service', function () {
     describe('centsToMajor', function () {
-        it('does not divide zero-decimal currencies', function () {
-            assert.equal(metaCapiService._private.centsToMajor(3000, 'twd'), 3000);
+        it('does not divide true zero-decimal currencies', function () {
             assert.equal(metaCapiService._private.centsToMajor(500, 'JPY'), 500);
+            assert.equal(metaCapiService._private.centsToMajor(500, 'krw'), 500);
         });
 
-        it('divides decimal currencies', function () {
+        it('divides two-decimal currencies, including TWD', function () {
             assert.equal(metaCapiService._private.centsToMajor(1299, 'usd'), 12.99);
+            // Stripe treats TWD as two-decimal: NT$3,000 → 300000, NT$300 → 30000
+            assert.equal(metaCapiService._private.centsToMajor(300000, 'twd'), 3000);
+            assert.equal(metaCapiService._private.centsToMajor(30000, 'twd'), 300);
         });
     });
 
     describe('buildPurchaseEvent / buildSubscribeEvent', function () {
         const session = {
             id: 'cs_test_123',
-            amount_total: 300,
+            amount_total: 30000,
             currency: 'twd',
             subscription: 'sub_123',
             customer_details: {name: 'Ray Wu', email: 'buyer@example.com'},
@@ -64,7 +67,7 @@ describe('Meta CAPI service', function () {
         it('builds a renewal Purchase keyed to the invoice id', function () {
             const invoice = {
                 id: 'in_123',
-                amount_paid: 300,
+                amount_paid: 30000,
                 currency: 'twd',
                 subscription: 'sub_123',
                 customer: 'cus_123',
