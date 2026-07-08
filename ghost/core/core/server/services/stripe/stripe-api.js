@@ -575,6 +575,15 @@ module.exports = class StripeAPI {
             automatic_tax: {
                 enabled: this._config.enableAutomaticTax
             },
+            // Abandoned-checkout recovery: keep the email a visitor typed on the
+            // Stripe page and expose a 30-day recovery URL on expired sessions,
+            // so anonymous direct-checkout traffic is no longer unrecoverable.
+            after_expiration: {
+                recovery: {
+                    enabled: true,
+                    allow_promotion_codes: true
+                }
+            },
             metadata,
             discounts,
             /*
