@@ -340,6 +340,37 @@ describe('Generators', function () {
                 // <loc> should exist exactly one time
                 assert.equal(generator.siteMapContent.get(1).match(/<loc>/g).length, 3);
             });
+            it('does not include configured internal page slugs', function () {
+                generator.addUrl('http://my-ghost-blog.com/start-here/', {
+                    id: 'public-page',
+                    slug: 'start-here'
+                });
+                generator.addUrl('http://my-ghost-blog.com/start-here-surveys-admin/', {
+                    id: 'internal-page',
+                    slug: 'start-here-surveys-admin'
+                });
+
+                const xml = generator.getXml();
+
+                assert.match(xml, /start-here\//);
+                assert.doesNotMatch(xml, /start-here-surveys-admin/);
+            });
+            it('supports an explicit exclusion list', function () {
+                generator = new PageGenerator({excludedSlugs: ['private-dashboard']});
+                generator.addUrl('http://my-ghost-blog.com/public/', {
+                    id: 'public-page',
+                    slug: 'public'
+                });
+                generator.addUrl('http://my-ghost-blog.com/private-dashboard/', {
+                    id: 'private-page',
+                    slug: 'private-dashboard'
+                });
+
+                const xml = generator.getXml();
+
+                assert.match(xml, /public\//);
+                assert.doesNotMatch(xml, /private-dashboard/);
+            });
             it('does not include pages containing canonical_url', function () {
                 generator.addUrl('https://myblog.com/test2/', testUtils.DataGenerator.forKnex.createPost({
                     page: true,

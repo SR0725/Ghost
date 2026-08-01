@@ -117,6 +117,9 @@ function servePublicFile(location, file, type, maxAge, options = {}) {
 
 // Handles requests to public static files served by Ghost
 function servePublicFiles(siteApp) {
+    // Serve a concise, machine-readable guide to the publication and author.
+    siteApp.get('/llms.txt', createPublicFileMiddleware('static', 'llms.txt', 'text/plain', config.get('caching:robotstxt:maxAge')));
+
     // Serve sitemap.xsl
     siteApp.get('/sitemap.xsl', createPublicFileMiddleware('static', 'sitemap.xsl', 'text/xsl', config.get('caching:sitemapXSL:maxAge')));
 

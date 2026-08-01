@@ -25,6 +25,11 @@
         "defaultSettings": "core/server/data/schema/default-settings/default-settings",
         "assetSrc": "core/frontend/src"
     },
+    "sitemap": {
+        "excludedPageSlugs": [
+            "start-here-surveys-admin"
+        ]
+    },
     "adapters": {
         "sso": {
             "active": "DefaultSSOAdapter"
