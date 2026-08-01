@@ -385,6 +385,19 @@ describe('Default Frontend routing', function () {
             'Disallow: /.ghost/analytics/api/\n');
         });
 
+        it('should retrieve llms.txt with the publication identity', async function () {
+            const res = await request.get('/llms.txt')
+                .expect('Cache-Control', testUtils.cacheRules.hour)
+                .expect('ETag', /[0-9a-f]{32}/i)
+                .expect('Content-Type', 'text/plain')
+                .expect(200)
+                .expect(assertCorrectFrontendHeaders);
+
+            assert.match(res.text, /Ray 貓（吳睿誠）/);
+            assert.match(res.text, new RegExp(`${config.get('url')}/author/ray/`));
+            assert.doesNotMatch(res.text, /\{\{blog-url\}\}/);
+        });
+
         it('should retrieve default favicon.ico', async function () {
             await request.get('/favicon.ico')
                 .expect('Cache-Control', testUtils.cacheRules.day)

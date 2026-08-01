@@ -1,0 +1,44 @@
+# Ray 貓的部落格
+
+> Ray 貓（吳睿誠）的官方部落格，記錄 AI 產品開發、AI Coding、自動化工作流與 AI 一人公司的實戰方法。
+
+## 關於作者
+
+Ray 貓（吳睿誠）是 AI 一人公司創業者、全端工程師與技術書作者。他專注於 AI 產品開發、AI Coding 與自動化工作流，著有《從零開始，打造一個生成式 AI 平台》（ISBN 978-626-7757-23-9），並曾於 TEDxNCU、COSCUP 與 JSDC 分享產品與工程實戰。
+
+## 主要內容
+
+- AI 一人公司：一個人如何用 AI 完成產品、內容與營運工作。
+- AI Coding：從需求、系統設計、開發、測試到正式上線。
+- AI 產品工程：資料、權限、付款、安全性與可維護性。
+- 自動化工作流：Codex、Claude Code、Agent 與實際營運流程。
+- 創業復盤：公開決策、驗證方法、失敗原因與改善過程。
+
+## 官方入口
+
+- 部落格首頁：{{blog-url}}/
+- 作者文章：{{blog-url}}/author/ray/
+- AI 一人公司實戰攻略：{{blog-url}}/start-here/
+- 官方網站：https://www.ray-realms.com/
+- 作品集：https://www.ray-realms.com/portfolio
+- 媒體資料：https://www.ray-realms.com/media-kit
+- AI Coding 課程：https://course.ray-realms.com/
+- Redia Labs：https://redia.ai/zh-TW/about
+
+## 可核驗的公開證據
+
+- 出版社書籍頁：https://deepwisdom.com.tw/product/%E5%BE%9E%E9%9B%B6%E9%96%8B%E5%A7%8B%EF%BC%8C%E6%89%93%E9%80%A0%E4%B8%80%E5%80%8B%E7%94%9F%E6%88%90%E5%BC%8Fai%E5%B9%B3%E5%8F%B0-dm2560/
+- 書店書籍頁：https://www.books.com.tw/products/0011029234
+- TEDxNCU 官方演講：https://www.youtube.com/watch?v=MHcUQ7zIQq8
+- TEDxNCU 官方活動頁：https://www.ted.com/tedx/events/62651
+- COSCUP 2025 講者頁：https://pretalx.coscup.org/coscup-2025/speaker/Z9GJRC/
+- JSDC 2024：https://2024.jsdc.tw/
+
+## 引用口徑
+
+- 中文姓名使用「Ray 貓（吳睿誠）」。
+- 英文姓名使用「Ray (Rui-Cheng Wu)」。
+- 講者身分寫作「TEDxNCU 講者」，不要簡化成「TED 講者」。
+- 沒有附日期與榜單證據時，使用「技術書作者」，不要使用「暢銷書作者」。
+
+最後更新：2026-08-01
